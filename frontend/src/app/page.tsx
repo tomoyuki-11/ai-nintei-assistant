@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
 import { downloadExcel } from '@/lib/excel'
-import HamburgerMenu from './components/HamburgerMenu'
 
 type Transcription = {
   id: string
@@ -170,13 +169,6 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* ヘッダー */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-transparent_1.png" alt="AI認定調査アシスタント" style={{ height: '36px', width: 'auto' }} />
-        <HamburgerMenu />
-      </header>
-
       <div className="max-w-3xl mx-auto px-4 py-4">
         {/* 認定調査開始ボタン */}
         <Link

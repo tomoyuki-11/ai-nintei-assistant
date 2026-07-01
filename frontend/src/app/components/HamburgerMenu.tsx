@@ -43,6 +43,14 @@ export default function HamburgerMenu() {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-50">
+          <Link
+            href="/"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            ホーム
+          </Link>
+          <div className="border-t border-gray-100 my-1" />
           {isAdmin && (
             <Link
               href="/staff"

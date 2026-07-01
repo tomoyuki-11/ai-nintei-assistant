@@ -1,24 +1,21 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import FormatForm from '../components/FormatForm'
 
 export default function AssessPage() {
-  const router = useRouter()
-
   return (
     <main className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
-        <button
-          onClick={() => router.push('/')}
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 transition-colors"
-        >
-          ← 戻る
-        </button>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-transparent_1.png" alt="AI認定調査アシスタント" style={{ height: '32px', width: 'auto' }} />
-      </header>
       <div className="max-w-3xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-bold text-gray-900">認定調査</h1>
+          <Link
+            href="/"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors"
+          >
+            ← ホームへ戻る
+          </Link>
+        </div>
         <FormatForm />
       </div>
     </main>

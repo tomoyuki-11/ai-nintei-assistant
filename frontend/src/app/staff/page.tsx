@@ -105,7 +105,7 @@ export default function StaffPage() {
             href="/"
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors"
           >
-            ← トップへ戻る
+            ← ホームへ戻る
           </Link>
         </div>
 

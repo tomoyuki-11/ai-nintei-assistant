@@ -52,7 +52,7 @@ export default function LoginPage() {
   return (
     <main style={{ minHeight: '100vh', background: '#f9fafb', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', padding: '2rem 0' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo-login.png" alt="AI認定調査アシスタント" style={{ display: 'block', width: '80vw', maxWidth: '400px', height: 'auto' }} />
+      <img src="/images/logo-login.png" alt="AI認定調査アシスタント" style={{ display: 'block', width: '80vw', maxWidth: '400px', height: 'auto' }} />
       <div style={{ width: '100%', maxWidth: '384px', padding: '0 1rem' }}>
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <div className="mb-5">

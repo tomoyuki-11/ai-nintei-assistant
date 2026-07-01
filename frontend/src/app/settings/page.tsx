@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { authHeaders, getTokenPayload, isAuthenticated } from '@/lib/auth'
-import HamburgerMenu from '@/app/components/HamburgerMenu'
 
 type SaveMode = 'auto' | 'confirm'
 
@@ -62,18 +62,16 @@ export default function SettingsPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        <button
-          onClick={() => router.push('/')}
-          className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
-        >
-          ← ホームに戻る
-        </button>
-        <HamburgerMenu />
-      </header>
-
       <div className="max-w-lg mx-auto px-4 py-8">
-        <h1 className="text-xl font-bold text-gray-900 mb-6">設定</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-bold text-gray-900">設定</h1>
+          <Link
+            href="/"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors"
+          >
+            ← ホームへ戻る
+          </Link>
+        </div>
 
         {loading && <p className="text-sm text-gray-400">読み込み中...</p>}
         {error && (
