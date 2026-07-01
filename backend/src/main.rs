@@ -1,3 +1,697 @@
-fn main() {
-    println!("Hello, world!");
+use axum::{
+    extract::{Path, State},
+    http::{Method, StatusCode},
+    routing::{get, patch, post},
+    Json, Router,
+};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+use tower_http::cors::{Any, CorsLayer};
+use tracing_subscriber::EnvFilter;
+use uuid::Uuid;
+
+mod auth;
+mod claude;
+mod db;
+use auth::{create_token, AuthSuperAdmin, AuthUser};
+use claude::ClaudeClient;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub claude: ClaudeClient,
+    pub db: PgPool,
+    pub jwt_secret: String,
+    pub admin_tool_password: String,
+}
+
+// ─── Request / Response types ─────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct SuperAdminLoginRequest {
+    password: String,
+}
+
+#[derive(Serialize)]
+struct TokenResponse {
+    token: String,
+}
+
+#[derive(Serialize)]
+struct LicenseResponse {
+    org_id: String,
+    org_name: String,
+}
+
+#[derive(Deserialize)]
+struct CreateStaffRequest {
+    email: String,
+    password: String,
+    role: Option<String>,
+    name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CreateOrgRequest {
+    name: String,
+    plan: String,
+    license_expires_at: Option<String>,
+    system_prompt: String,
+}
+
+#[derive(Serialize)]
+struct CreateOrgResponse {
+    id: String,
+    name: String,
+    license_key: String,
+    initial_password: String,
+}
+
+#[derive(Deserialize)]
+struct UpdateOrgRequest {
+    name: String,
+    system_prompt: String,
+    plan: String,
+    license_expires_at: Option<String>,
+    is_active: bool,
+}
+
+#[derive(Deserialize)]
+struct SignupRequest {
+    org_name: String,
+    email: String,
+    password: String,
+}
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    org_id: String,
+    login_id: String,
+    password: String,
+}
+
+#[derive(Serialize)]
+struct AuthResponse {
+    token: String,
+    org_name: String,
+    role: String,
+}
+
+#[derive(Deserialize)]
+struct SaveRequest {
+    text: String,
+}
+
+#[derive(Serialize)]
+struct SaveResponse {
+    id: String,
+}
+
+#[derive(Deserialize)]
+struct FormatRequest {
+    text: String,
+    id: Option<String>,
+    save: Option<bool>,
+    save_text: Option<bool>,
+}
+
+#[derive(Serialize)]
+struct FormatResponse {
+    formatted: String,
+}
+
+#[derive(Deserialize)]
+struct UpdateTextRequest {
+    text: String,
+}
+
+#[derive(Deserialize)]
+struct SaveResultRequest {
+    text: String,
+    formatted: String,
+    id: Option<String>,
+    save_text: Option<bool>,
+}
+
+#[derive(Serialize)]
+struct SettingsResponse {
+    transcription_save_mode: String,
+    formatted_save_mode: String,
+}
+
+#[derive(Deserialize)]
+struct UpdateSettingsRequest {
+    transcription_save_mode: String,
+    formatted_save_mode: String,
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+#[tokio::main]
+async fn main() {
+    dotenvy::dotenv().ok();
+
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let anthropic_api_key = std::env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY must be set");
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "dev-secret-change-in-production".to_string());
+    let admin_tool_password = std::env::var("SUPERADMIN_PASSWORD")
+        .unwrap_or_else(|_| "superadmin1234".to_string());
+
+    tracing::info!("DATABASE_URL: {}", database_url);
+    tracing::info!("ANTHROPIC_API_KEY: set");
+
+    let pool = PgPool::connect(&database_url)
+        .await
+        .expect("Failed to connect to database");
+
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("Failed to run migrations");
+
+    tracing::info!("Database connected and migrations applied");
+
+    let state = AppState {
+        claude: ClaudeClient::new(anthropic_api_key),
+        db: pool,
+        jwt_secret,
+        admin_tool_password,
+    };
+
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE])
+        .allow_headers(Any)
+        .allow_origin(Any);
+
+    let app = Router::new()
+        .route("/health", get(health_handler))
+        // スーパー管理者
+        .route("/api/adminTool/login", post(admin_tool_login_handler))
+        .route("/api/adminTool/organizations", get(admin_tool_list_orgs_handler).post(admin_tool_create_org_handler))
+        .route(
+            "/api/adminTool/organizations/{id}",
+            axum::routing::put(admin_tool_update_org_handler)
+                .delete(admin_tool_delete_org_handler),
+        )
+        .route("/api/adminTool/organizations/{id}/staff", get(admin_tool_list_staff_handler))
+        // 施設ユーザー
+        .route("/api/auth/signup", post(signup_handler))
+        .route("/api/auth/login", post(login_handler))
+        .route("/api/auth/license/{key}", get(license_check_handler))
+        .route("/api/staff", get(list_staff_handler).post(create_staff_handler))
+        .route("/api/staff/{id}", axum::routing::delete(delete_staff_handler))
+        .route("/api/settings", get(get_settings_handler).patch(update_settings_handler))
+        .route("/api/save-result", post(save_result_handler))
+        .route("/api/transcription", post(save_transcription_handler))
+        .route("/api/format", post(format_handler))
+        .route("/api/history", get(history_handler))
+        .route(
+            "/api/history/{id}",
+            axum::routing::put(update_text_handler).delete(delete_handler),
+        )
+        .route("/api/history/{id}/text", axum::routing::delete(delete_text_handler))
+        .route("/api/history/{id}/formatted", axum::routing::delete(delete_formatted_handler))
+        .layer(cors)
+        .with_state(state);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    tracing::info!("Server running on http://0.0.0.0:8080");
+    axum::serve(listener, app).await.unwrap();
+}
+
+// ─── ヘルス ───────────────────────────────────────────────────────────────────
+
+async fn health_handler() -> &'static str {
+    "OK"
+}
+
+// ─── スーパー管理者ハンドラー ─────────────────────────────────────────────────
+
+async fn admin_tool_login_handler(
+    State(state): State<AppState>,
+    Json(body): Json<SuperAdminLoginRequest>,
+) -> Result<Json<TokenResponse>, (StatusCode, String)> {
+    if body.password != state.admin_tool_password {
+        return Err((StatusCode::UNAUTHORIZED, "パスワードが正しくありません".to_string()));
+    }
+
+    let token = create_token(Uuid::nil(), Uuid::nil(), "adminTool", "", &state.jwt_secret)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(TokenResponse { token }))
+}
+
+async fn admin_tool_list_orgs_handler(
+    State(state): State<AppState>,
+    _: AuthSuperAdmin,
+) -> Result<Json<Vec<db::Organization>>, (StatusCode, String)> {
+    let orgs = db::list_all_organizations(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(orgs))
+}
+
+async fn admin_tool_create_org_handler(
+    State(state): State<AppState>,
+    _: AuthSuperAdmin,
+    Json(body): Json<CreateOrgRequest>,
+) -> Result<Json<CreateOrgResponse>, (StatusCode, String)> {
+    let license_expires_at = parse_date(body.license_expires_at)?;
+
+    let initial_password = generate_password();
+    let password_hash = hash_password(&initial_password).await?;
+
+    let org_id = db::create_organization(
+        &state.db,
+        &body.name,
+        &body.system_prompt,
+        &body.plan,
+        license_expires_at,
+    )
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    db::create_user(&state.db, org_id, "admin", &password_hash, "admin", "")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let org = db::get_organization(&state.db, org_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "作成した施設が見つかりません".to_string()))?;
+
+    Ok(Json(CreateOrgResponse {
+        id: org.id.to_string(),
+        name: org.name,
+        license_key: org.license_key,
+        initial_password,
+    }))
+}
+
+async fn admin_tool_update_org_handler(
+    State(state): State<AppState>,
+    _: AuthSuperAdmin,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdateOrgRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let license_expires_at = parse_date(body.license_expires_at)?;
+
+    db::update_organization(
+        &state.db,
+        id,
+        &body.name,
+        &body.system_prompt,
+        &body.plan,
+        license_expires_at,
+        body.is_active,
+    )
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::OK)
+}
+
+async fn admin_tool_delete_org_handler(
+    State(state): State<AppState>,
+    _: AuthSuperAdmin,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    db::delete_organization(&state.db, id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
+}
+
+async fn admin_tool_list_staff_handler(
+    State(state): State<AppState>,
+    _: AuthSuperAdmin,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<db::UserInfo>>, (StatusCode, String)> {
+    let users = db::list_users_by_org(&state.db, id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(users))
+}
+
+// ─── 施設ユーザーハンドラー ───────────────────────────────────────────────────
+
+async fn license_check_handler(
+    State(state): State<AppState>,
+    Path(key): Path<String>,
+) -> Result<Json<LicenseResponse>, (StatusCode, String)> {
+    let org = db::find_org_by_license_key(&state.db, &key)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "ライセンスキーが見つかりません".to_string()))?;
+
+    if !org.is_active {
+        return Err((StatusCode::FORBIDDEN, "このライセンスは無効化されています".to_string()));
+    }
+    if let Some(expires_at) = org.license_expires_at {
+        if expires_at < Utc::now() {
+            return Err((StatusCode::FORBIDDEN, "ライセンスの有効期限が切れています".to_string()));
+        }
+    }
+
+    Ok(Json(LicenseResponse {
+        org_id: org.id.to_string(),
+        org_name: org.name,
+    }))
+}
+
+async fn list_staff_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Vec<db::UserInfo>>, (StatusCode, String)> {
+    if auth.role != "admin" {
+        return Err((StatusCode::FORBIDDEN, "管理者権限が必要です".to_string()));
+    }
+    let users = db::list_users_by_org(&state.db, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(users))
+}
+
+async fn create_staff_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<CreateStaffRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    if auth.role != "admin" {
+        return Err((StatusCode::FORBIDDEN, "管理者権限が必要です".to_string()));
+    }
+    let role = body.role.as_deref().unwrap_or("member");
+    if role != "admin" && role != "member" {
+        return Err((StatusCode::BAD_REQUEST, "ロールは admin または member を指定してください".to_string()));
+    }
+    let name = body.name.as_deref().unwrap_or("");
+    let password_hash = hash_password(&body.password).await?;
+    db::create_user(&state.db, auth.organization_id, &body.email, &password_hash, role, name)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("duplicate") || e.to_string().contains("unique") {
+                (StatusCode::CONFLICT, "このログインIDは既に使用されています".to_string())
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+            }
+        })?;
+    Ok(StatusCode::CREATED)
+}
+
+async fn delete_staff_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    if auth.role != "admin" {
+        return Err((StatusCode::FORBIDDEN, "管理者権限が必要です".to_string()));
+    }
+    if id == auth.user_id {
+        return Err((StatusCode::BAD_REQUEST, "自分自身は削除できません".to_string()));
+    }
+    db::delete_user(&state.db, id, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
+}
+
+async fn signup_handler(
+    State(state): State<AppState>,
+    Json(body): Json<SignupRequest>,
+) -> Result<Json<AuthResponse>, (StatusCode, String)> {
+    let password_hash = hash_password(&body.password).await?;
+
+    let org_id = db::create_organization(&state.db, &body.org_name, "", "trial", None)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let user_id = db::create_user(&state.db, org_id, &body.email, &password_hash, "admin", "")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let token = create_token(user_id, org_id, "admin", "", &state.jwt_secret)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(AuthResponse {
+        token,
+        org_name: body.org_name,
+        role: "admin".to_string(),
+    }))
+}
+
+async fn login_handler(
+    State(state): State<AppState>,
+    Json(body): Json<LoginRequest>,
+) -> Result<Json<AuthResponse>, (StatusCode, String)> {
+    let org_id = Uuid::parse_str(&body.org_id)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "無効な事業所IDです".to_string()))?;
+
+    let user = db::find_user_by_login_in_org(&state.db, &body.login_id, org_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| {
+            (StatusCode::UNAUTHORIZED, "ログインIDまたはパスワードが正しくありません".to_string())
+        })?;
+
+    let hash = user.password_hash.clone();
+    let password = body.password.clone();
+    let valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &hash))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !valid {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            "メールアドレスまたはパスワードが正しくありません".to_string(),
+        ));
+    }
+
+    let org = db::get_organization(&state.db, user.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "組織が見つかりません".to_string()))?;
+
+    if !org.is_active {
+        return Err((StatusCode::FORBIDDEN, "このアカウントは無効化されています".to_string()));
+    }
+    if let Some(expires_at) = org.license_expires_at {
+        if expires_at < Utc::now() {
+            return Err((StatusCode::FORBIDDEN, "ライセンスの有効期限が切れています".to_string()));
+        }
+    }
+
+    let token = create_token(user.id, user.organization_id, &user.role, &user.name, &state.jwt_secret)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(AuthResponse {
+        token,
+        org_name: org.name,
+        role: user.role,
+    }))
+}
+
+async fn get_settings_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<SettingsResponse>, (StatusCode, String)> {
+    let settings = db::get_org_settings(&state.db, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "組織が見つかりません".to_string()))?;
+    Ok(Json(SettingsResponse {
+        transcription_save_mode: settings.transcription_save_mode,
+        formatted_save_mode: settings.formatted_save_mode,
+    }))
+}
+
+async fn update_settings_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<UpdateSettingsRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    if auth.role != "admin" {
+        return Err((StatusCode::FORBIDDEN, "管理者権限が必要です".to_string()));
+    }
+    let valid_modes = ["auto", "confirm"];
+    if !valid_modes.contains(&body.transcription_save_mode.as_str())
+        || !valid_modes.contains(&body.formatted_save_mode.as_str())
+    {
+        return Err((StatusCode::BAD_REQUEST, "無効な設定値です".to_string()));
+    }
+    db::update_org_settings(
+        &state.db,
+        auth.organization_id,
+        &body.transcription_save_mode,
+        &body.formatted_save_mode,
+    )
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
+}
+
+async fn save_result_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<SaveResultRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    match body.id.as_deref().and_then(|s| Uuid::parse_str(s).ok()) {
+        Some(id) => {
+            db::update_formatted(&state.db, id, &body.formatted, auth.organization_id)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
+        None => {
+            if body.save_text.unwrap_or(true) {
+                db::save_transcription(&state.db, &body.text, &body.formatted, auth.organization_id, &auth.name)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            } else {
+                db::save_formatted_only(&state.db, &body.formatted, auth.organization_id, &auth.name)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            }
+        }
+    }
+    Ok(StatusCode::OK)
+}
+
+async fn save_transcription_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<SaveRequest>,
+) -> Result<Json<SaveResponse>, (StatusCode, String)> {
+    let id = db::save_text_only(&state.db, &body.text, auth.organization_id, &auth.name)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(SaveResponse { id: id.to_string() }))
+}
+
+async fn format_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<FormatRequest>,
+) -> Result<Json<FormatResponse>, (StatusCode, String)> {
+    let org = db::get_organization(&state.db, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let custom_prompt = org.as_ref().map(|o| o.system_prompt.as_str());
+
+    let formatted = state
+        .claude
+        .format_transcription(&body.text, custom_prompt)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    if body.save.unwrap_or(true) {
+        match body.id.as_deref().and_then(|s| Uuid::parse_str(s).ok()) {
+            Some(id) => {
+                if let Err(e) = db::update_formatted(&state.db, id, &formatted, auth.organization_id).await {
+                    tracing::error!("Failed to update: {}", e);
+                }
+            }
+            None => {
+                if body.save_text.unwrap_or(true) {
+                    if let Err(e) = db::save_transcription(&state.db, &body.text, &formatted, auth.organization_id, &auth.name).await {
+                        tracing::error!("Failed to save: {}", e);
+                    }
+                } else {
+                    if let Err(e) = db::save_formatted_only(&state.db, &formatted, auth.organization_id, &auth.name).await {
+                        tracing::error!("Failed to save formatted: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Json(FormatResponse { formatted }))
+}
+
+async fn history_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Vec<db::Transcription>>, (StatusCode, String)> {
+    let history = db::list_transcriptions(&state.db, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(history))
+}
+
+async fn update_text_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdateTextRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    db::update_text(&state.db, id, &body.text, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
+}
+
+async fn delete_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    db::delete_transcription(&state.db, id, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
+}
+
+async fn delete_text_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    db::clear_text(&state.db, id, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
+}
+
+async fn delete_formatted_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    db::clear_formatted(&state.db, id, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
+}
+
+// ─── ヘルパー関数 ──────────────────────────────────────────────────────────────
+
+fn generate_password() -> String {
+    let u = Uuid::new_v4().to_string().replace("-", "");
+    u[..12].to_string()
+}
+
+fn parse_date(s: Option<String>) -> Result<Option<DateTime<Utc>>, (StatusCode, String)> {
+    match s {
+        None => Ok(None),
+        Some(v) if v.is_empty() => Ok(None),
+        Some(v) => {
+            let dt = format!("{}T00:00:00Z", v);
+            dt.parse::<DateTime<Utc>>()
+                .map(Some)
+                .map_err(|_| (StatusCode::BAD_REQUEST, "日付の形式が正しくありません (YYYY-MM-DD)".to_string()))
+        }
+    }
+}
+
+async fn hash_password(password: &str) -> Result<String, (StatusCode, String)> {
+    let pw = password.to_string();
+    tokio::task::spawn_blocking(move || bcrypt::hash(&pw, bcrypt::DEFAULT_COST))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }

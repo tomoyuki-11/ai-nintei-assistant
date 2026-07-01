@@ -1,0 +1,110 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { setToken } from '@/lib/auth'
+
+const API = process.env.NEXT_PUBLIC_API_URL
+
+export default function LoginPage() {
+  const router = useRouter()
+  const [orgId, setOrgId] = useState('')
+  const [orgName, setOrgName] = useState('')
+  const [loginId, setLoginId] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const id = localStorage.getItem('org_id')
+    const name = localStorage.getItem('org_name')
+    if (!id) {
+      router.replace('/licence')
+      return
+    }
+    setOrgId(id)
+    setOrgName(name ?? '')
+  }, [router])
+
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ org_id: orgId, login_id: loginId, password }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      setToken(data.token)
+      router.push('/')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'ログインに失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!orgId) return null
+
+  return (
+    <main style={{ minHeight: '100vh', background: '#f9fafb', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', padding: '2rem 0' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo-login.png" alt="AI認定調査アシスタント" style={{ display: 'block', width: '80vw', maxWidth: '400px', height: 'auto' }} />
+      <div style={{ width: '100%', maxWidth: '384px', padding: '0 1rem' }}>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-gray-900">ログイン</h2>
+            {orgName && <p className="text-xs text-blue-600 font-medium mt-0.5">{orgName}</p>}
+          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ログインID
+              </label>
+              <input
+                type="text"
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+                placeholder="admin"
+                required
+                autoFocus
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                パスワード
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'ログイン中...' : 'ログイン'}
+            </button>
+          </form>
+          <p className="mt-4 text-center">
+            <button
+              onClick={() => router.push('/licence')}
+              className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              ← ライセンスキーの入力に戻る
+            </button>
+          </p>
+        </div>
+      </div>
+    </main>
+  )
+}
