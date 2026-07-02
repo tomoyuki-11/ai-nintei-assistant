@@ -1,0 +1,1 @@
+ALTER TABLE organizations ADD COLUMN metered_credits INTEGER NOT NULL DEFAULT 0;

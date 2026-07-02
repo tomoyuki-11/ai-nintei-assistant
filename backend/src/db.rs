@@ -391,6 +391,37 @@ pub async fn increment_usage(pool: &PgPool, org_id: Uuid, year_month: &str) -> R
     Ok(())
 }
 
+pub async fn get_org_credits(pool: &PgPool, org_id: Uuid) -> Result<i32, sqlx::Error> {
+    let row: Option<(i32,)> = sqlx::query_as(
+        "SELECT metered_credits FROM organizations WHERE id = $1",
+    )
+    .bind(org_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| r.0).unwrap_or(0))
+}
+
+pub async fn add_credits(pool: &PgPool, org_id: Uuid, amount: i32) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE organizations SET metered_credits = metered_credits + $1 WHERE id = $2",
+    )
+    .bind(amount)
+    .bind(org_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn deduct_credit(pool: &PgPool, org_id: Uuid) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE organizations SET metered_credits = metered_credits - 1 WHERE id = $1 AND metered_credits > 0",
+    )
+    .bind(org_id)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() > 0)
+}
+
 pub async fn upgrade_org_to_monthly(
     pool: &PgPool,
     org_id: Uuid,

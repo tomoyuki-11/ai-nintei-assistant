@@ -26,6 +26,7 @@ pub struct AppState {
     pub stripe_secret_key: String,
     pub stripe_webhook_secret: String,
     pub stripe_price_id: String,
+    pub stripe_credit_price_id: String,
     pub http_client: reqwest::Client,
 }
 
@@ -162,6 +163,7 @@ struct PlanStatusResponse {
     monthly_usage: i32,
     monthly_limit: Option<i32>,
     is_limit_reached: bool,
+    credits: Option<i32>,
 }
 
 const TRIAL_MONTHLY_LIMIT: i32 = 3;
@@ -186,6 +188,7 @@ async fn main() {
     let stripe_secret_key = std::env::var("STRIPE_SECRET_KEY").unwrap_or_default();
     let stripe_webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_default();
     let stripe_price_id = std::env::var("STRIPE_PRICE_ID").unwrap_or_default();
+    let stripe_credit_price_id = std::env::var("STRIPE_CREDIT_PRICE_ID").unwrap_or_default();
 
     tracing::info!("DATABASE_URL: {}", database_url);
     tracing::info!("ANTHROPIC_API_KEY: set");
@@ -209,6 +212,7 @@ async fn main() {
         stripe_secret_key,
         stripe_webhook_secret,
         stripe_price_id,
+        stripe_credit_price_id,
         http_client: reqwest::Client::new(),
     };
 
@@ -237,6 +241,7 @@ async fn main() {
         .route("/api/settings", get(get_settings_handler).patch(update_settings_handler))
         .route("/api/plan-status", get(plan_status_handler))
         .route("/api/stripe/create-checkout-session", post(create_checkout_session_handler))
+        .route("/api/stripe/create-credit-checkout", post(create_credit_checkout_handler))
         .route("/api/webhook/stripe", post(stripe_webhook_handler))
         .route("/api/save-result", post(save_result_handler))
         .route("/api/transcription", post(save_transcription_handler))
@@ -555,6 +560,16 @@ async fn plan_status_handler(
     };
     let is_limit_reached = monthly_limit.map(|limit| monthly_usage >= limit).unwrap_or(false);
 
+    let credits = if org.plan == "metered" {
+        Some(
+            db::get_org_credits(&state.db, org.id)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
+        )
+    } else {
+        None
+    };
+
     Ok(Json(PlanStatusResponse {
         plan: org.plan,
         is_expired,
@@ -562,6 +577,7 @@ async fn plan_status_handler(
         monthly_usage,
         monthly_limit,
         is_limit_reached,
+        credits,
     }))
 }
 
@@ -659,6 +675,14 @@ async fn format_handler(
                 return Err((StatusCode::FORBIDDEN, "ライセンスの有効期限が切れています".to_string()));
             }
         }
+        if o.plan == "metered" {
+            let credits = db::get_org_credits(&state.db, o.id)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            if credits <= 0 {
+                return Err((StatusCode::PAYMENT_REQUIRED, "クレジットが不足しています。クレジットを購入してください".to_string()));
+            }
+        }
         let plan_limit = match o.plan.as_str() {
             "trial" => Some(TRIAL_MONTHLY_LIMIT),
             "monthly" => Some(STANDARD_MONTHLY_LIMIT),
@@ -682,9 +706,12 @@ async fn format_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-    // 使用回数をインクリメント
+    // 使用回数をインクリメント・クレジット消費
     if let Some(ref o) = org {
         let _ = db::increment_usage(&state.db, o.id, &year_month).await;
+        if o.plan == "metered" {
+            let _ = db::deduct_credit(&state.db, o.id).await;
+        }
     }
 
     if body.save.unwrap_or(true) {
@@ -853,6 +880,64 @@ async fn create_checkout_session_handler(
     Ok(Json(CheckoutSessionResponse { url }))
 }
 
+async fn create_credit_checkout_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<CheckoutSessionResponse>, (StatusCode, String)> {
+    if state.stripe_secret_key.is_empty() {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe未設定です".to_string()));
+    }
+    if state.stripe_credit_price_id.is_empty() {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe Credit Price ID未設定です".to_string()));
+    }
+
+    let frontend_url = std::env::var("FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let org_id_str = auth.organization_id.to_string();
+    let success_url = format!("{}/?checkout=credit", frontend_url);
+    let cancel_url = frontend_url;
+
+    let params: &[(&str, &str)] = &[
+        ("mode", "payment"),
+        ("line_items[0][price]", state.stripe_credit_price_id.as_str()),
+        ("line_items[0][quantity]", "1"),
+        ("success_url", success_url.as_str()),
+        ("cancel_url", cancel_url.as_str()),
+        ("metadata[org_id]", org_id_str.as_str()),
+        ("metadata[credits]", "1"),
+    ];
+
+    let encoded_body = serde_urlencoded::to_string(params)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let response = state
+        .http_client
+        .post("https://api.stripe.com/v1/checkout/sessions")
+        .basic_auth(&state.stripe_secret_key, Some(""))
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(encoded_body)
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !response.status().is_success() {
+        let err_body = response.text().await.unwrap_or_default();
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Stripe error: {}", err_body)));
+    }
+
+    let session: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let url = session["url"]
+        .as_str()
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "Stripe response に URL が含まれていません".to_string()))?
+        .to_string();
+
+    Ok(Json(CheckoutSessionResponse { url }))
+}
+
 async fn stripe_webhook_handler(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
@@ -877,21 +962,33 @@ async fn stripe_webhook_handler(
 
     match event_type {
         "checkout.session.completed" => {
-            let metadata = &event["data"]["object"]["metadata"];
+            let session = &event["data"]["object"];
+            let mode = session["mode"].as_str().unwrap_or("");
+            let metadata = &session["metadata"];
+
             if let Some(org_id_str) = metadata["org_id"].as_str() {
                 if let Ok(org_id) = Uuid::parse_str(org_id_str) {
-                    let customer_id = event["data"]["object"]["customer"]
-                        .as_str()
-                        .unwrap_or("")
-                        .to_string();
-                    let subscription_id = event["data"]["object"]["subscription"]
-                        .as_str()
-                        .unwrap_or("")
-                        .to_string();
-                    db::upgrade_org_to_monthly(&state.db, org_id, &customer_id, &subscription_id)
-                        .await
-                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                    tracing::info!("Org {} → monthly プランに更新", org_id_str);
+                    match mode {
+                        "subscription" => {
+                            let customer_id = session["customer"].as_str().unwrap_or("").to_string();
+                            let subscription_id = session["subscription"].as_str().unwrap_or("").to_string();
+                            db::upgrade_org_to_monthly(&state.db, org_id, &customer_id, &subscription_id)
+                                .await
+                                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                            tracing::info!("Org {} → monthly プランに更新", org_id_str);
+                        }
+                        "payment" => {
+                            let credits: i32 = metadata["credits"]
+                                .as_str()
+                                .and_then(|s| s.parse().ok())
+                                .unwrap_or(1);
+                            db::add_credits(&state.db, org_id, credits)
+                                .await
+                                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                            tracing::info!("Org {} に {}クレジット追加", org_id_str, credits);
+                        }
+                        _ => {}
+                    }
                 }
             }
         }

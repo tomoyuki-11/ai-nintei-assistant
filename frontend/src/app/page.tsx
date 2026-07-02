@@ -39,13 +39,16 @@ export default function HomePage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deletingTextId, setDeletingTextId] = useState<string | null>(null)
   const [deletingFormattedId, setDeletingFormattedId] = useState<string | null>(null)
-  const [paymentSuccess, setPaymentSuccess] = useState(false)
+  const [paymentSuccess, setPaymentSuccess] = useState<'subscription' | 'credit' | null>(null)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       if (params.get('checkout') === 'success') {
-        setPaymentSuccess(true)
+        setPaymentSuccess('subscription')
+        window.history.replaceState({}, '', '/')
+      } else if (params.get('checkout') === 'credit') {
+        setPaymentSuccess('credit')
         window.history.replaceState({}, '', '/')
       }
     }
@@ -184,9 +187,13 @@ export default function HomePage() {
         {/* 決済成功バナー */}
         {paymentSuccess && (
           <div className="mb-4 rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between">
-            <p className="text-sm text-green-700 font-medium">スタンダードプランへのアップグレードが完了しました！</p>
+            <p className="text-sm text-green-700 font-medium">
+              {paymentSuccess === 'credit'
+                ? 'クレジットの購入が完了しました！（1回分追加）'
+                : 'スタンダードプランへのアップグレードが完了しました！'}
+            </p>
             <button
-              onClick={() => setPaymentSuccess(false)}
+              onClick={() => setPaymentSuccess(null)}
               className="text-green-500 hover:text-green-700 text-lg leading-none"
             >×</button>
           </div>
