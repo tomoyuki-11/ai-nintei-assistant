@@ -40,6 +40,8 @@ export default function HomePage() {
   const [deletingTextId, setDeletingTextId] = useState<string | null>(null)
   const [deletingFormattedId, setDeletingFormattedId] = useState<string | null>(null)
   const [paymentSuccess, setPaymentSuccess] = useState<'subscription' | 'credit' | null>(null)
+  const [formatConfirmItem, setFormatConfirmItem] = useState<Transcription | null>(null)
+  const [limitError, setLimitError] = useState('')
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -47,9 +49,17 @@ export default function HomePage() {
       if (params.get('checkout') === 'success') {
         setPaymentSuccess('subscription')
         window.history.replaceState({}, '', '/')
+        const timers = [2000, 5000, 10000].map((ms) =>
+          setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
+        )
+        return () => timers.forEach(clearTimeout)
       } else if (params.get('checkout') === 'credit') {
         setPaymentSuccess('credit')
         window.history.replaceState({}, '', '/')
+        const timers = [2000, 5000].map((ms) =>
+          setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
+        )
+        return () => timers.forEach(clearTimeout)
       }
     }
   }, [])
@@ -153,6 +163,7 @@ export default function HomePage() {
   async function handleFormat(item: Transcription) {
     if (!item.text) return
     setConfirmingId(null)
+    setLimitError('')
     setFormattingId(item.id)
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/format`, {
@@ -160,6 +171,11 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ text: item.text, id: item.id }),
       })
+      if (res.status === 402) {
+        const msg = await res.text().catch(() => '')
+        setLimitError(msg || '使用回数の上限に達しています。クレジットを購入するか、プランをアップグレードしてください。')
+        return
+      }
       if (!res.ok) throw new Error(`エラー: ${res.status}`)
       const data = await res.json()
       setHistory((prev) =>
@@ -178,11 +194,35 @@ export default function HomePage() {
     if (item.formatted) {
       setConfirmingId(item.id)
     } else {
-      handleFormat(item)
+      setFormatConfirmItem(item)
     }
   }
 
   return (
+    <>
+    {/* AI整形確認モーダル */}
+    {formatConfirmItem && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
+          <p className="text-sm font-semibold text-gray-900 mb-2">AI整形を実行しますか？</p>
+          <p className="text-xs text-gray-500 mb-5">入力されたテキストをAIが認定調査票形式に整形します。</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setFormatConfirmItem(null)}
+              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={() => { const item = formatConfirmItem; setFormatConfirmItem(null); handleFormat(item) }}
+              className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors"
+            >
+              実行する
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <main className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-4">
         {/* 決済成功バナー */}
@@ -196,6 +236,17 @@ export default function HomePage() {
             <button
               onClick={() => setPaymentSuccess(null)}
               className="text-green-500 hover:text-green-700 text-lg leading-none"
+            >×</button>
+          </div>
+        )}
+
+        {/* 上限エラーバナー */}
+        {limitError && (
+          <div className="mb-4 rounded-xl bg-orange-50 border border-orange-200 px-4 py-3 flex items-center justify-between">
+            <p className="text-sm text-orange-700 font-medium">{limitError}</p>
+            <button
+              onClick={() => setLimitError('')}
+              className="text-orange-500 hover:text-orange-700 text-lg leading-none ml-3 shrink-0"
             >×</button>
           </div>
         )}
@@ -271,7 +322,7 @@ export default function HomePage() {
                           ) : confirmingId === item.id ? (
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-600">上書きしますか？</span>
-                              <button onClick={() => handleFormat(item)} className="rounded px-2.5 py-1 text-xs bg-orange-500 text-white hover:bg-orange-600 transition-colors">はい</button>
+                              <button onClick={() => { setConfirmingId(null); setFormatConfirmItem(item) }} className="rounded px-2.5 py-1 text-xs bg-orange-500 text-white hover:bg-orange-600 transition-colors">はい</button>
                               <button onClick={() => setConfirmingId(null)} className="rounded px-2.5 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">いいえ</button>
                             </div>
                           ) : (
@@ -367,5 +418,6 @@ export default function HomePage() {
         </div>
       </div>
     </main>
+    </>
   )
 }

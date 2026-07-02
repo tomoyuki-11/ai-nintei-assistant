@@ -102,6 +102,7 @@ export default function SuperAdminPage() {
   const [staffMap, setStaffMap] = useState<Record<string, StaffMember[]>>({});
   const [detailId, setDetailId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState('');
 
   function copyLicenseKey(orgId: string, key: string) {
     navigator.clipboard.writeText(key);
@@ -134,12 +135,20 @@ export default function SuperAdminPage() {
 
   async function loadOrgs() {
     setLoading(true);
+    setLoadError('');
     try {
       const res = await fetch(`${API}/api/adminTool/organizations`, {
         headers: superAdminHeaders(),
       });
+      if (res.status === 401) {
+        removeSuperAdminToken();
+        setIsLoggedIn(false);
+        return;
+      }
       if (!res.ok) throw new Error(await res.text());
       setOrgs(await res.json());
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'データの取得に失敗しました');
     } finally {
       setLoading(false);
     }
@@ -491,6 +500,15 @@ export default function SuperAdminPage() {
         )}
 
         {/* 施設一覧 */}
+        {loadError && (
+          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 flex items-center justify-between">
+            <p className="text-sm text-red-700 font-medium">{loadError}</p>
+            <button
+              onClick={loadOrgs}
+              className="ml-4 shrink-0 rounded-lg bg-red-100 px-3 py-1.5 text-xs text-red-700 hover:bg-red-200 transition-colors"
+            >再読み込み</button>
+          </div>
+        )}
         {loading ? (
           <p className="text-sm text-gray-400">読み込み中...</p>
         ) : (

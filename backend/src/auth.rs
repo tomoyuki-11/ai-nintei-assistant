@@ -27,7 +27,7 @@ pub fn create_token(
     name: &str,
     secret: &str,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    let exp = (Utc::now() + chrono::Duration::hours(24)).timestamp() as u64;
+    let exp = (Utc::now() + chrono::Duration::days(30)).timestamp() as u64;
     let claims = Claims {
         sub: user_id.to_string(),
         org_id: org_id.to_string(),
