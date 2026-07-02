@@ -46,14 +46,16 @@ type CreateForm = {
 
 const PLAN_LABELS: Record<string, string> = {
   trial: "トライアル",
-  basic: "ベーシック",
-  pro: "プロ",
+  metered: "従量課金",
+  monthly: "スタンダード（2,980円／月）",
+  dev: "開発者",
 };
 
 const PLAN_COLORS: Record<string, string> = {
   trial: "bg-gray-100 text-gray-600",
-  basic: "bg-blue-100 text-blue-700",
-  pro: "bg-purple-100 text-purple-700",
+  metered: "bg-blue-100 text-blue-700",
+  monthly: "bg-purple-100 text-purple-700",
+  dev: "bg-green-100 text-green-700",
 };
 
 function formatDate(iso: string | null): string {
@@ -355,9 +357,10 @@ export default function SuperAdminPage() {
                     }
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="trial">トライアル</option>
-                    <option value="basic">ベーシック</option>
-                    <option value="pro">プロ</option>
+                    <option value="trial">トライアル（14日・3回まで）</option>
+                    <option value="metered">従量課金</option>
+                    <option value="monthly">スタンダード：2,980円／月（8回・毎月リセット）</option>
+                    <option value="dev">開発者（制限なし）</option>
                   </select>
                 </div>
                 <div className="col-span-2">
@@ -628,9 +631,10 @@ export default function SuperAdminPage() {
                           }
                           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          <option value="trial">トライアル</option>
-                          <option value="basic">ベーシック</option>
-                          <option value="pro">プロ</option>
+                          <option value="trial">トライアル（14日・3回まで）</option>
+                          <option value="metered">従量課金</option>
+                          <option value="monthly">スタンダード：2,980円／月（8回・毎月リセット）</option>
+                    <option value="dev">開発者（制限なし）</option>
                         </select>
                       </div>
                       <div>

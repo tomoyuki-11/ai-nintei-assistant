@@ -4,7 +4,7 @@ use axum::{
     routing::{get, patch, post},
     Json, Router,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
@@ -23,6 +23,10 @@ pub struct AppState {
     pub db: PgPool,
     pub jwt_secret: String,
     pub admin_tool_password: String,
+    pub stripe_secret_key: String,
+    pub stripe_webhook_secret: String,
+    pub stripe_price_id: String,
+    pub http_client: reqwest::Client,
 }
 
 // ─── Request / Response types ─────────────────────────────────────────────────
@@ -145,6 +149,24 @@ struct UpdateSettingsRequest {
     formatted_save_mode: String,
 }
 
+#[derive(Serialize)]
+struct CheckoutSessionResponse {
+    url: String,
+}
+
+#[derive(Serialize)]
+struct PlanStatusResponse {
+    plan: String,
+    is_expired: bool,
+    days_remaining: Option<i64>,
+    monthly_usage: i32,
+    monthly_limit: Option<i32>,
+    is_limit_reached: bool,
+}
+
+const TRIAL_MONTHLY_LIMIT: i32 = 3;
+const STANDARD_MONTHLY_LIMIT: i32 = 8;
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 #[tokio::main]
@@ -161,6 +183,9 @@ async fn main() {
         .unwrap_or_else(|_| "dev-secret-change-in-production".to_string());
     let admin_tool_password = std::env::var("SUPERADMIN_PASSWORD")
         .unwrap_or_else(|_| "superadmin1234".to_string());
+    let stripe_secret_key = std::env::var("STRIPE_SECRET_KEY").unwrap_or_default();
+    let stripe_webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_default();
+    let stripe_price_id = std::env::var("STRIPE_PRICE_ID").unwrap_or_default();
 
     tracing::info!("DATABASE_URL: {}", database_url);
     tracing::info!("ANTHROPIC_API_KEY: set");
@@ -181,6 +206,10 @@ async fn main() {
         db: pool,
         jwt_secret,
         admin_tool_password,
+        stripe_secret_key,
+        stripe_webhook_secret,
+        stripe_price_id,
+        http_client: reqwest::Client::new(),
     };
 
     let cors = CorsLayer::new()
@@ -206,6 +235,9 @@ async fn main() {
         .route("/api/staff", get(list_staff_handler).post(create_staff_handler))
         .route("/api/staff/{id}", axum::routing::delete(delete_staff_handler))
         .route("/api/settings", get(get_settings_handler).patch(update_settings_handler))
+        .route("/api/plan-status", get(plan_status_handler))
+        .route("/api/stripe/create-checkout-session", post(create_checkout_session_handler))
+        .route("/api/webhook/stripe", post(stripe_webhook_handler))
         .route("/api/save-result", post(save_result_handler))
         .route("/api/transcription", post(save_transcription_handler))
         .route("/api/format", post(format_handler))
@@ -426,7 +458,8 @@ async fn signup_handler(
 ) -> Result<Json<AuthResponse>, (StatusCode, String)> {
     let password_hash = hash_password(&body.password).await?;
 
-    let org_id = db::create_organization(&state.db, &body.org_name, "", "trial", None)
+    let trial_expires_at = Some(Utc::now() + Duration::days(14));
+    let org_id = db::create_organization(&state.db, &body.org_name, "", "trial", trial_expires_at)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -493,6 +526,42 @@ async fn login_handler(
         token,
         org_name: org.name,
         role: user.role,
+    }))
+}
+
+async fn plan_status_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<PlanStatusResponse>, (StatusCode, String)> {
+    let org = db::get_organization(&state.db, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "組織が見つかりません".to_string()))?;
+
+    let now = Utc::now();
+    let year_month = now.format("%Y-%m").to_string();
+
+    let is_expired = org.license_expires_at.map(|exp| exp < now).unwrap_or(false);
+    let days_remaining = org.license_expires_at.map(|exp| (exp - now).num_days());
+
+    let monthly_usage = db::get_monthly_usage(&state.db, org.id, &year_month)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let monthly_limit = match org.plan.as_str() {
+        "trial" => Some(TRIAL_MONTHLY_LIMIT),
+        "monthly" => Some(STANDARD_MONTHLY_LIMIT),
+        _ => None,
+    };
+    let is_limit_reached = monthly_limit.map(|limit| monthly_usage >= limit).unwrap_or(false);
+
+    Ok(Json(PlanStatusResponse {
+        plan: org.plan,
+        is_expired,
+        days_remaining,
+        monthly_usage,
+        monthly_limit,
+        is_limit_reached,
     }))
 }
 
@@ -581,6 +650,30 @@ async fn format_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    let year_month = Utc::now().format("%Y-%m").to_string();
+
+    // プラン制限チェック
+    if let Some(ref o) = org {
+        if let Some(expires_at) = o.license_expires_at {
+            if expires_at < Utc::now() {
+                return Err((StatusCode::FORBIDDEN, "ライセンスの有効期限が切れています".to_string()));
+            }
+        }
+        let plan_limit = match o.plan.as_str() {
+            "trial" => Some(TRIAL_MONTHLY_LIMIT),
+            "monthly" => Some(STANDARD_MONTHLY_LIMIT),
+            _ => None,
+        };
+        if let Some(limit) = plan_limit {
+            let usage = db::get_monthly_usage(&state.db, o.id, &year_month)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            if usage >= limit {
+                return Err((StatusCode::PAYMENT_REQUIRED, format!("今月の使用回数の上限（{}回）に達しました", limit)));
+            }
+        }
+    }
+
     let custom_prompt = org.as_ref().map(|o| o.system_prompt.as_str());
 
     let formatted = state
@@ -588,6 +681,11 @@ async fn format_handler(
         .format_transcription(&body.text, custom_prompt)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    // 使用回数をインクリメント
+    if let Some(ref o) = org {
+        let _ = db::increment_usage(&state.db, o.id, &year_month).await;
+    }
 
     if body.save.unwrap_or(true) {
         match body.id.as_deref().and_then(|s| Uuid::parse_str(s).ok()) {
@@ -694,4 +792,150 @@ async fn hash_password(password: &str) -> Result<String, (StatusCode, String)> {
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+// ─── Stripe ───────────────────────────────────────────────────────────────────
+
+async fn create_checkout_session_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<CheckoutSessionResponse>, (StatusCode, String)> {
+    if state.stripe_secret_key.is_empty() {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe未設定です".to_string()));
+    }
+    if state.stripe_price_id.is_empty() {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe Price ID未設定です".to_string()));
+    }
+
+    let frontend_url = std::env::var("FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let org_id_str = auth.organization_id.to_string();
+    let success_url = format!("{}/?checkout=success", frontend_url);
+    let cancel_url = frontend_url;
+
+    let params: &[(&str, &str)] = &[
+        ("mode", "subscription"),
+        ("line_items[0][price]", state.stripe_price_id.as_str()),
+        ("line_items[0][quantity]", "1"),
+        ("success_url", success_url.as_str()),
+        ("cancel_url", cancel_url.as_str()),
+        ("metadata[org_id]", org_id_str.as_str()),
+    ];
+
+    let encoded_body = serde_urlencoded::to_string(params)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let response = state
+        .http_client
+        .post("https://api.stripe.com/v1/checkout/sessions")
+        .basic_auth(&state.stripe_secret_key, Some(""))
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(encoded_body)
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !response.status().is_success() {
+        let err_body = response.text().await.unwrap_or_default();
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Stripe error: {}", err_body)));
+    }
+
+    let session: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let url = session["url"]
+        .as_str()
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "Stripe response に URL が含まれていません".to_string()))?
+        .to_string();
+
+    Ok(Json(CheckoutSessionResponse { url }))
+}
+
+async fn stripe_webhook_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let sig_header = headers
+        .get("stripe-signature")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "Stripe-Signature ヘッダーがありません".to_string()))?;
+
+    if !state.stripe_webhook_secret.is_empty()
+        && !verify_stripe_signature(&body, sig_header, &state.stripe_webhook_secret)
+    {
+        return Err((StatusCode::UNAUTHORIZED, "Webhook シグネチャが無効です".to_string()));
+    }
+
+    let event: serde_json::Value = serde_json::from_slice(&body)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let event_type = event["type"].as_str().unwrap_or("");
+    tracing::info!("Stripe webhook: {}", event_type);
+
+    match event_type {
+        "checkout.session.completed" => {
+            let metadata = &event["data"]["object"]["metadata"];
+            if let Some(org_id_str) = metadata["org_id"].as_str() {
+                if let Ok(org_id) = Uuid::parse_str(org_id_str) {
+                    let customer_id = event["data"]["object"]["customer"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string();
+                    let subscription_id = event["data"]["object"]["subscription"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string();
+                    db::upgrade_org_to_monthly(&state.db, org_id, &customer_id, &subscription_id)
+                        .await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    tracing::info!("Org {} → monthly プランに更新", org_id_str);
+                }
+            }
+        }
+        "customer.subscription.deleted" => {
+            let customer_id = event["data"]["object"]["customer"].as_str().unwrap_or("");
+            if !customer_id.is_empty() {
+                db::revert_org_plan_by_customer(&state.db, customer_id)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                tracing::info!("Customer {} のサブスクリプション解約", customer_id);
+            }
+        }
+        _ => {}
+    }
+
+    Ok(StatusCode::OK)
+}
+
+fn verify_stripe_signature(payload: &[u8], sig_header: &str, secret: &str) -> bool {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    let mut timestamp_str = None;
+    let mut expected_sig = None;
+
+    for part in sig_header.split(',') {
+        if let Some(t) = part.strip_prefix("t=") {
+            timestamp_str = Some(t);
+        } else if let Some(v) = part.strip_prefix("v1=") {
+            expected_sig = Some(v);
+        }
+    }
+
+    let (Some(timestamp), Some(expected)) = (timestamp_str, expected_sig) else {
+        return false;
+    };
+
+    let signed_payload = format!("{}.{}", timestamp, String::from_utf8_lossy(payload));
+
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret.as_bytes()) else {
+        return false;
+    };
+    mac.update(signed_payload.as_bytes());
+    let computed = hex::encode(mac.finalize().into_bytes());
+
+    computed == expected
 }

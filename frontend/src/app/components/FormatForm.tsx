@@ -140,7 +140,10 @@ export default function FormatForm() {
         }),
       })
 
-      if (!response.ok) throw new Error(`エラー: ${response.status}`)
+      if (!response.ok) {
+        const msg = await response.text().catch(() => '')
+        throw new Error(msg || `エラー: ${response.status}`)
+      }
 
       const data = await response.json()
       setResult(data.formatted)

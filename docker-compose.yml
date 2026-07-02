@@ -30,6 +30,10 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
       - SUPERADMIN_PASSWORD=${SUPERADMIN_PASSWORD:-superadmin1234}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRICE_ID=${STRIPE_PRICE_ID}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       db:
         condition: service_healthy

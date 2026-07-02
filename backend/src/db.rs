@@ -366,6 +366,58 @@ pub async fn delete_transcription(
     Ok(())
 }
 
+// ─── Usage counts ─────────────────────────────────────────────────────────────
+
+pub async fn get_monthly_usage(pool: &PgPool, org_id: Uuid, year_month: &str) -> Result<i32, sqlx::Error> {
+    let row: Option<(i32,)> = sqlx::query_as(
+        "SELECT count FROM usage_counts WHERE organization_id = $1 AND year_month = $2",
+    )
+    .bind(org_id)
+    .bind(year_month)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| r.0).unwrap_or(0))
+}
+
+pub async fn increment_usage(pool: &PgPool, org_id: Uuid, year_month: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO usage_counts (organization_id, year_month, count) VALUES ($1, $2, 1)
+         ON CONFLICT (organization_id, year_month) DO UPDATE SET count = usage_counts.count + 1",
+    )
+    .bind(org_id)
+    .bind(year_month)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn upgrade_org_to_monthly(
+    pool: &PgPool,
+    org_id: Uuid,
+    stripe_customer_id: &str,
+    stripe_subscription_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE organizations SET plan = 'monthly', stripe_customer_id = $1, stripe_subscription_id = $2 WHERE id = $3",
+    )
+    .bind(stripe_customer_id)
+    .bind(stripe_subscription_id)
+    .bind(org_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn revert_org_plan_by_customer(pool: &PgPool, stripe_customer_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE organizations SET plan = 'trial', stripe_subscription_id = NULL WHERE stripe_customer_id = $1",
+    )
+    .bind(stripe_customer_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn list_transcriptions(
     pool: &PgPool,
     org_id: Uuid,

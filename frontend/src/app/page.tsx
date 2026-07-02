@@ -39,6 +39,17 @@ export default function HomePage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deletingTextId, setDeletingTextId] = useState<string | null>(null)
   const [deletingFormattedId, setDeletingFormattedId] = useState<string | null>(null)
+  const [paymentSuccess, setPaymentSuccess] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('checkout') === 'success') {
+        setPaymentSuccess(true)
+        window.history.replaceState({}, '', '/')
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -170,6 +181,17 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-4">
+        {/* 決済成功バナー */}
+        {paymentSuccess && (
+          <div className="mb-4 rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between">
+            <p className="text-sm text-green-700 font-medium">スタンダードプランへのアップグレードが完了しました！</p>
+            <button
+              onClick={() => setPaymentSuccess(false)}
+              className="text-green-500 hover:text-green-700 text-lg leading-none"
+            >×</button>
+          </div>
+        )}
+
         {/* 認定調査開始ボタン */}
         <Link
           href="/assess"
