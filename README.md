@@ -75,6 +75,65 @@ docker compose logs backend
 
 ---
 
+## Stripe 決済のローカルテスト（任意）
+
+決済機能（プランアップグレード・クレジット購入）をローカルでテストする場合は Stripe CLI が必要です。
+
+### 1. Stripe CLI をインストール
+
+```bash
+# Mac
+brew install stripe/stripe-cli/stripe
+
+# Windows（Scoop）
+scoop bucket add stripe https://github.com/stripe/scoop-stripe-cli.git
+scoop install stripe
+```
+
+### 2. Stripe アカウントにログイン
+
+```bash
+stripe login
+```
+
+ブラウザが開くので、Stripe アカウントでログインします。
+
+### 3. Webhook をローカルにフォワード
+
+```bash
+stripe listen --forward-to localhost:8080/api/webhook/stripe
+```
+
+実行すると以下のように `whsec_xxx...` が表示されます。
+
+```
+> Ready! You are using Stripe API Version [...]
+> Your webhook signing secret is whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (^C to quit)
+```
+
+### 4. Webhook シークレットを `.env` に設定
+
+表示された `whsec_xxx...` を `.env` の `STRIPE_WEBHOOK_SECRET=` に貼り付けて、Docker を再起動します。
+
+```bash
+# .env を編集後
+docker compose up -d
+```
+
+### 5. テスト決済
+
+Stripe のテストカード番号でそのまま決済できます。
+
+| 項目 | 値 |
+|---|---|
+| カード番号 | `4242 4242 4242 4242` |
+| 有効期限 | 任意の未来の日付（例: `12/30`） |
+| CVC | 任意の3桁（例: `123`） |
+
+> `stripe listen` は Docker とは別のターミナルで実行したまま（Ctrl+C で終了しないこと）。
+
+---
+
 ## プラン種別
 
 | プラン | 内容 |
