@@ -80,8 +80,16 @@ export default function FormatForm() {
     }
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('Speech recognition error:', event.error)
       setIsRecording(false)
+      if (event.error === 'not-allowed') {
+        setError('マイクへのアクセスが拒否されています。ブラウザのアドレスバー左のアイコンからマイクの使用を許可してください。')
+      } else if (event.error === 'audio-capture') {
+        setError('マイクが見つかりません。マイクが接続されているか確認してください。')
+      } else if (event.error === 'network') {
+        setError('音声認識にはインターネット接続が必要です。')
+      } else {
+        setError(`音声認識エラーが発生しました（${event.error}）`)
+      }
     }
 
     recognition.onend = () => setIsRecording(false)
