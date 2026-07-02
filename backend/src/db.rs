@@ -139,28 +139,12 @@ pub async fn delete_organization(pool: &PgPool, id: Uuid) -> Result<(), sqlx::Er
     Ok(())
 }
 
-#[allow(dead_code)]
-pub async fn update_system_prompt(
-    pool: &PgPool,
-    org_id: Uuid,
-    system_prompt: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE organizations SET system_prompt = $1 WHERE id = $2")
-        .bind(system_prompt)
-        .bind(org_id)
-        .execute(pool)
-        .await?;
-    Ok(())
-}
-
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 #[derive(sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
     pub organization_id: Uuid,
-    #[allow(dead_code)]
-    pub email: String,
     pub password_hash: String,
     pub role: String,
     pub name: String,
@@ -228,7 +212,7 @@ pub async fn find_user_by_login_in_org(
     org_id: Uuid,
 ) -> Result<Option<User>, sqlx::Error> {
     sqlx::query_as::<_, User>(
-        "SELECT id, organization_id, email, password_hash, role, name
+        "SELECT id, organization_id, password_hash, role, name
          FROM users WHERE email = $1 AND organization_id = $2",
     )
     .bind(login_id)
