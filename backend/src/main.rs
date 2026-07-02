@@ -560,7 +560,7 @@ async fn plan_status_handler(
     };
     let is_limit_reached = monthly_limit.map(|limit| monthly_usage >= limit).unwrap_or(false);
 
-    let credits = if org.plan == "metered" {
+    let credits = if org.plan == "metered" || org.plan == "monthly" {
         Some(
             db::get_org_credits(&state.db, org.id)
                 .await
@@ -667,6 +667,7 @@ async fn format_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let year_month = Utc::now().format("%Y-%m").to_string();
+    let mut use_extra_credit = false;
 
     // プラン制限チェック
     if let Some(ref o) = org {
@@ -682,6 +683,7 @@ async fn format_handler(
             if credits <= 0 {
                 return Err((StatusCode::PAYMENT_REQUIRED, "クレジットが不足しています。クレジットを購入してください".to_string()));
             }
+            use_extra_credit = true;
         }
         let plan_limit = match o.plan.as_str() {
             "trial" => Some(TRIAL_MONTHLY_LIMIT),
@@ -693,7 +695,20 @@ async fn format_handler(
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             if usage >= limit {
-                return Err((StatusCode::PAYMENT_REQUIRED, format!("今月の使用回数の上限（{}回）に達しました", limit)));
+                if o.plan == "monthly" {
+                    let credits = db::get_org_credits(&state.db, o.id)
+                        .await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    if credits <= 0 {
+                        return Err((StatusCode::PAYMENT_REQUIRED, format!(
+                            "今月の使用回数の上限（{}回）に達しました。追加クレジットを購入してください",
+                            limit
+                        )));
+                    }
+                    use_extra_credit = true;
+                } else {
+                    return Err((StatusCode::PAYMENT_REQUIRED, format!("今月の使用回数の上限（{}回）に達しました", limit)));
+                }
             }
         }
     }
@@ -709,7 +724,7 @@ async fn format_handler(
     // 使用回数をインクリメント・クレジット消費
     if let Some(ref o) = org {
         let _ = db::increment_usage(&state.db, o.id, &year_month).await;
-        if o.plan == "metered" {
+        if use_extra_credit {
             let _ = db::deduct_credit(&state.db, o.id).await;
         }
     }

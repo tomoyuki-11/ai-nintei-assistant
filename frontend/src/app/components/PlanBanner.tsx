@@ -18,7 +18,7 @@ export default function PlanBanner() {
   const [upgrading, setUpgrading] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
 
-  useEffect(() => {
+  function fetchStatus() {
     if (!isAuthenticated()) return
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/plan-status`, {
       headers: authHeaders(),
@@ -26,6 +26,12 @@ export default function PlanBanner() {
       .then((res) => res.ok ? res.json() : null)
       .then((data) => { if (data) setStatus(data) })
       .catch(() => {})
+  }
+
+  useEffect(() => {
+    fetchStatus()
+    window.addEventListener('planStatusChanged', fetchStatus)
+    return () => window.removeEventListener('planStatusChanged', fetchStatus)
   }, [])
 
   async function handleUpgrade() {
@@ -130,7 +136,7 @@ export default function PlanBanner() {
 
   if (status.plan === 'monthly' && status.monthly_limit !== null) {
     return (
-      <div className={`border-b px-4 py-1.5 flex items-center justify-end text-xs ${
+      <div className={`border-b px-4 py-1.5 flex items-center justify-between text-xs ${
         status.is_limit_reached
           ? 'bg-orange-50 border-orange-200 text-orange-700'
           : 'bg-gray-50 border-gray-200 text-gray-500'
@@ -139,6 +145,18 @@ export default function PlanBanner() {
           今月の使用: {status.monthly_usage} / {status.monthly_limit} 回
           {status.is_limit_reached && <span className="ml-1 font-semibold">（上限到達）</span>}
         </span>
+        {status.is_limit_reached && (
+          <span className="flex items-center gap-3">
+            <span>追加クレジット: <span className="font-semibold">{status.credits ?? 0} 回</span></span>
+            <button
+              onClick={handleCreditPurchase}
+              disabled={purchasing}
+              className="rounded-md bg-orange-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
+            >
+              {purchasing ? '処理中...' : 'クレジットを購入（¥600/回）'}
+            </button>
+          </span>
+        )}
       </div>
     )
   }
