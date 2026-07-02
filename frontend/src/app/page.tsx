@@ -166,6 +166,7 @@ export default function HomePage() {
         prev.map((h) => h.id === item.id ? { ...h, formatted: data.formatted } : h)
       )
       setOpenFormattedId(item.id)
+      window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
       alert(e instanceof Error ? e.message : '整形に失敗しました')
     } finally {
@@ -336,6 +337,10 @@ export default function HomePage() {
                         整形結果を{openFormattedId === item.id ? '閉じる' : '見る'}
                       </button>
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)}
+                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-green-700 transition-colors"
+                        >Excelをダウンロード</button>
                         {isEditing && (
                           deletingFormattedId === item.id ? (
                             <div className="flex items-center gap-1.5">
@@ -347,10 +352,6 @@ export default function HomePage() {
                             <button onClick={() => { setDeletingFormattedId(item.id); setDeletingTextId(null); setDeletingId(null) }} className="text-xs text-red-400 hover:text-red-600 hover:underline transition-colors">整形結果を削除</button>
                           )
                         )}
-                        <button
-                          onClick={() => downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)}
-                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-green-700 transition-colors"
-                        >Excelをダウンロード</button>
                       </div>
                     </div>
                     {openFormattedId === item.id && (
