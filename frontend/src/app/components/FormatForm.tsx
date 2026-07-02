@@ -29,6 +29,7 @@ export default function FormatForm() {
   const [settings, setSettings] = useState<Settings>({ transcription_save_mode: 'auto', formatted_save_mode: 'auto' })
   const [confirm, setConfirm] = useState<ConfirmState>(null)
   const [transcriptionDeclined, setTranscriptionDeclined] = useState(false)
+  const [showFormatConfirm, setShowFormatConfirm] = useState(false)
 
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const baseTextRef = useRef('')
@@ -147,6 +148,7 @@ export default function FormatForm() {
 
       const data = await response.json()
       setResult(data.formatted)
+      window.dispatchEvent(new Event('planStatusChanged'))
 
       if (settings.formatted_save_mode === 'confirm') {
         setConfirm({ type: 'formatted', text, formatted: data.formatted, id: savedId })
@@ -190,6 +192,30 @@ export default function FormatForm() {
 
   return (
     <div className="space-y-6">
+      {/* AI整形確認モーダル */}
+      {showFormatConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
+            <p className="text-sm font-semibold text-gray-900 mb-2">AI整形を実行しますか？</p>
+            <p className="text-xs text-gray-500 mb-5">入力されたテキストをAIが認定調査票形式に整形します。</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowFormatConfirm(false)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => { setShowFormatConfirm(false); handleSubmit() }}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors"
+              >
+                実行する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 確認モーダル */}
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -252,7 +278,7 @@ export default function FormatForm() {
       </div>
 
       <button
-        onClick={handleSubmit}
+        onClick={() => setShowFormatConfirm(true)}
         disabled={loading || !text.trim()}
         className="w-full rounded-lg bg-blue-600 px-4 py-3 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
