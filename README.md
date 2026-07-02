@@ -4,85 +4,89 @@
 
 ---
 
-## 必要な環境
+## クイックスタート（3ステップ）
 
-- [Docker](https://www.docker.com/products/docker-desktop/) および Docker Compose
-- Anthropic API キー（[取得はこちら](https://console.anthropic.com/)）
+### 事前準備
 
----
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) をインストールして起動しておく
+- [Anthropic](https://console.anthropic.com/) で API キーを取得しておく
 
-## セットアップ手順
+### 手順
 
-### 1. リポジトリをクローン
+**① リポジトリをクローン**
 
 ```bash
 git clone https://github.com/tomoyuki-11/ai-nintei-assistant.git
 cd ai-nintei-assistant
 ```
 
-### 2. 環境変数ファイルを作成
+**② 環境変数ファイルを作成**
 
-プロジェクトルートに `.env` ファイルを作成し、以下の内容を記載してください。
-
-```env
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxx
-JWT_SECRET=任意の長い文字列（例: mysecretkey1234567890）
-SUPERADMIN_PASSWORD=管理ツールのパスワード（任意）
+```bash
+cp .env.example .env
 ```
 
-| 変数名 | 説明 |
-|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic の API キー（必須） |
-| `JWT_SECRET` | JWT トークン署名用の秘密鍵（任意の文字列） |
-| `SUPERADMIN_PASSWORD` | 管理ツールのログインパスワード（省略時: `superadmin1234`） |
+`.env` をテキストエディタで開き、`ANTHROPIC_API_KEY=` の行を自分のAPIキーに書き換えてください。
 
-### 3. Docker を起動
+```
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxx  ← ここだけ変更
+```
+
+**③ Docker を起動**
 
 ```bash
 docker compose up -d
 ```
 
-初回起動時はDockerイメージのダウンロードとRustのビルドに **5〜10分程度** かかります。
-
-ログを確認する場合:
+初回はRustのビルドで **5〜10分** かかります。以下のコマンドで起動完了を確認できます。
 
 ```bash
-docker compose logs -f
+docker compose logs backend
+# → "Server running on http://0.0.0.0:8080" が表示されれば完了
 ```
-
-バックエンドに `listening on 0.0.0.0:8080` と表示されれば起動完了です。
 
 ---
 
-## アクセス先URL
+## アクセス先
 
-| 画面 | URL | 説明 |
-|---|---|---|
-| **本体アプリ** | http://localhost:3000 | 施設スタッフ向けメイン画面 |
-| **管理ツール** | http://localhost:3000/adminTool | 施設・ライセンス管理画面 |
+| 画面 | URL |
+|---|---|
+| **本体アプリ** | http://localhost:3000 |
+| **管理ツール** | http://localhost:3000/adminTool |
 
 ---
 
 ## 初期セットアップ（初回のみ）
 
-### 管理ツールで施設を登録する
+### 1. 施設を登録する
 
 1. http://localhost:3000/adminTool にアクセス
-2. `.env` で設定した `SUPERADMIN_PASSWORD` でログイン（省略時: `superadmin1234`）
-3. 「新規施設を作成」から施設名・プラン・有効期限を入力して作成
-4. 作成された施設のライセンスキーをコピー
+2. `.env` の `SUPERADMIN_PASSWORD`（デフォルト: `superadmin1234`）でログイン
+3. 「新規施設を作成」から施設名・プランを入力して作成
+4. 作成完了画面に表示される **ライセンスキー** と **初期パスワード** をメモしておく
 
-### 本体アプリにログインする
+### 2. 本体アプリにログインする
 
-1. http://localhost:3000 にアクセス（ライセンスキー入力画面が表示される）
-2. コピーしたライセンスキーを入力
-3. 管理ツールの施設詳細から作成したスタッフアカウントでログイン
+1. http://localhost:3000 にアクセス
+2. メモしたライセンスキーを入力
+3. ログインID `admin`・パスワードは初期パスワードでログイン
 
-> 初回は管理ツールの「スタッフ管理」からadminアカウントを作成してください。
+> ログイン後、設定画面からパスワードを変更することを推奨します。
 
 ---
 
-## 停止・再起動
+## プラン種別
+
+| プラン | 内容 |
+|---|---|
+| **トライアル** | 14日間・3回まで無料 |
+| **スタンダード** | 月額2,980円・月8回（Stripe決済） |
+| **従量課金** | 600円/回の前払いクレジット制（Stripe決済） |
+| **開発者** | 制限なし |
+
+---
+
+## よく使うコマンド
 
 ```bash
 # 停止
@@ -91,7 +95,10 @@ docker compose down
 # 再起動
 docker compose up -d
 
-# データも含めて完全リセット（DBも消えます）
+# ログ確認
+docker compose logs -f backend
+
+# データも含めて完全リセット（DBのデータも消えます）
 docker compose down -v
 ```
 
@@ -101,8 +108,9 @@ docker compose down -v
 
 | レイヤー | 技術 |
 |---|---|
-| フロントエンド | Next.js 15 (App Router) / TypeScript / Tailwind CSS |
+| フロントエンド | Next.js 15 / TypeScript / Tailwind CSS |
 | バックエンド | Rust / Axum / sqlx |
 | データベース | PostgreSQL 16 |
 | AI | Anthropic Claude API |
+| 決済 | Stripe |
 | インフラ | Docker / Docker Compose |

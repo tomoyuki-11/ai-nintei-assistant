@@ -12,7 +12,8 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8080
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   backend:
     image: rust:1.96-slim
@@ -28,7 +29,7 @@ services:
       - DATABASE_URL=postgres://postgres:password@db:5432/nintei
       - RUST_LOG=info
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - JWT_SECRET=${JWT_SECRET:-change-this-to-a-long-random-string}
       - SUPERADMIN_PASSWORD=${SUPERADMIN_PASSWORD:-superadmin1234}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
@@ -38,6 +39,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080' 2>/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 90
+      start_period: 30s
 
   db:
     image: postgres:16-alpine
