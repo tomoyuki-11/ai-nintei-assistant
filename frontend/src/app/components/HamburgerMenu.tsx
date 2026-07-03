@@ -11,6 +11,7 @@ export default function HamburgerMenu() {
   const menuRef = useRef<HTMLDivElement>(null)
   const payload = getTokenPayload()
   const isAdmin = payload?.role === 'admin'
+  const isIndividual = payload?.role === 'individual'
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -60,7 +61,7 @@ export default function HamburgerMenu() {
               スタッフ管理
             </Link>
           )}
-          {isAdmin && (
+          {(isAdmin || isIndividual) && (
             <Link
               href="/settings"
               onClick={() => setOpen(false)}

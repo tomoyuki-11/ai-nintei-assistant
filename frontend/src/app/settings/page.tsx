@@ -28,7 +28,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
     const payload = getTokenPayload()
-    if (payload?.role !== 'admin') { router.push('/'); return }
+    if (payload?.role !== 'admin' && payload?.role !== 'individual') { router.push('/'); return }
 
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/settings`, {
       headers: authHeaders(),
