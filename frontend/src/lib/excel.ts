@@ -104,9 +104,15 @@ function parseResult(text: string): ExcelRow[] {
     }
 
     if (inOverview) {
-      const clean = line.replace(/\*\*/g, '').trim()
-      if (clean) overviewLines.push(clean)
-      continue
+      // 3桁番号で始まる行が来たら概況ブロック終了
+      if (/^-?\s*\d{3}\s+/.test(line)) {
+        inOverview = false
+        // fall through して項目として処理
+      } else {
+        const clean = line.replace(/\*\*/g, '').trim()
+        if (clean) overviewLines.push(clean)
+        continue
+      }
     }
 
     // 3桁番号で始まる行
