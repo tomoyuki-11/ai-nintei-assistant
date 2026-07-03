@@ -218,6 +218,20 @@ async fn main() {
 
     tracing::info!("Database connected and migrations applied");
 
+    // Excel保存から5日後に自動削除するバックグラウンドタスク
+    let cleanup_pool = pool.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            match db::delete_excel_expired_records(&cleanup_pool).await {
+                Ok(n) if n > 0 => tracing::info!("自動削除: {}件のExcel済みレコードを削除しました", n),
+                Err(e) => tracing::error!("自動削除エラー: {}", e),
+                _ => {}
+            }
+        }
+    });
+
     let state = AppState {
         claude: ClaudeClient::new(anthropic_api_key),
         db: pool,
@@ -274,12 +288,26 @@ async fn main() {
         )
         .route("/api/history/{id}/text", axum::routing::delete(delete_text_handler))
         .route("/api/history/{id}/formatted", axum::routing::delete(delete_formatted_handler))
+        .route("/api/history/{id}/mark-downloaded", post(mark_downloaded_handler))
         .layer(cors)
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
     tracing::info!("Server running on http://0.0.0.0:8080");
     axum::serve(listener, app).await.unwrap();
+}
+
+// ─── Excel ダウンロード済みマーク ─────────────────────────────────────────────
+
+async fn mark_downloaded_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    db::mark_excel_downloaded(&state.db, id, auth.org_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ─── Whisper 文字起こし ───────────────────────────────────────────────────────

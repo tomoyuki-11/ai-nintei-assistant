@@ -490,3 +490,29 @@ pub async fn list_transcriptions(
     .fetch_all(pool)
     .await
 }
+
+pub async fn mark_excel_downloaded(
+    pool: &PgPool,
+    id: Uuid,
+    org_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE transcriptions SET excel_downloaded_at = NOW() WHERE id = $1 AND organization_id = $2",
+    )
+    .bind(id)
+    .bind(org_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_excel_expired_records(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        "DELETE FROM transcriptions
+         WHERE excel_downloaded_at IS NOT NULL
+           AND excel_downloaded_at < NOW() - INTERVAL '5 days'",
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}

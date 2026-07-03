@@ -389,7 +389,13 @@ export default function HomePage() {
                       </button>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)}
+                          onClick={() => {
+                            downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)
+                            fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${item.id}/mark-downloaded`, {
+                              method: 'POST',
+                              headers: authHeaders(),
+                            }).catch(() => {})
+                          }}
                           className="rounded-lg bg-green-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-green-700 transition-colors"
                         >Excelをダウンロード</button>
                         {isEditing && (
