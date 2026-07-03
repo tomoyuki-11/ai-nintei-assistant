@@ -26,7 +26,7 @@ export default function SettingsPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!isAuthenticated()) { router.push('/licence'); return }
+    if (!isAuthenticated()) { router.push('/start'); return }
     const payload = getTokenPayload()
     if (payload?.role !== 'admin') { router.push('/'); return }
 

@@ -36,7 +36,7 @@ export default function FormatForm() {
   const finalAdditionsRef = useRef('')
 
   useEffect(() => {
-    if (!isAuthenticated()) { router.push('/licence'); return }
+    if (!isAuthenticated()) { router.push('/start'); return }
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/settings`, { headers: authHeaders() })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => { if (data) setSettings(data) })

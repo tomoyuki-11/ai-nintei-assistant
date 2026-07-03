@@ -433,6 +433,48 @@ pub async fn revert_org_plan_by_customer(pool: &PgPool, stripe_customer_id: &str
     Ok(())
 }
 
+pub async fn find_individual_user_by_email(
+    pool: &PgPool,
+    email: &str,
+) -> Result<Option<User>, sqlx::Error> {
+    sqlx::query_as::<_, User>(
+        "SELECT id, organization_id, password_hash, role, name
+         FROM users WHERE email = $1 AND role = 'individual'",
+    )
+    .bind(email)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn create_individual_user(
+    pool: &PgPool,
+    email: &str,
+    password_hash: &str,
+) -> Result<(Uuid, Uuid), sqlx::Error> {
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(14);
+    let org_row: (Uuid,) = sqlx::query_as(
+        "INSERT INTO organizations (name, system_prompt, plan, license_expires_at, license_key)
+         VALUES ($1, '', 'trial', $2, gen_random_uuid()::text) RETURNING id",
+    )
+    .bind(email)
+    .bind(expires_at)
+    .fetch_one(pool)
+    .await?;
+    let org_id = org_row.0;
+
+    let user_row: (Uuid,) = sqlx::query_as(
+        "INSERT INTO users (organization_id, email, password_hash, role, name)
+         VALUES ($1, $2, $3, 'individual', $2) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(email)
+    .bind(password_hash)
+    .fetch_one(pool)
+    .await?;
+
+    Ok((user_row.0, org_id))
+}
+
 pub async fn list_transcriptions(
     pool: &PgPool,
     org_id: Uuid,

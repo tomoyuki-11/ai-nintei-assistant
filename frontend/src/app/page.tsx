@@ -66,7 +66,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!isAuthenticated()) {
-      router.push('/licence')
+      router.push('/start')
       return
     }
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history`, {

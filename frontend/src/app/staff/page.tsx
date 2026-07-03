@@ -39,7 +39,7 @@ export default function StaffPage() {
   const myId = payload?.sub
 
   useEffect(() => {
-    if (!isAuthenticated()) { router.push('/licence'); return }
+    if (!isAuthenticated()) { router.push('/start'); return }
     const p = getTokenPayload()
     if (p?.role !== 'admin') { router.push('/'); return }
     loadStaff()

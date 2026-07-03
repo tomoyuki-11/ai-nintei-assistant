@@ -12,7 +12,7 @@ export default function TopNav() {
   function handleLogout() {
     if (!confirm('ログアウトしますか？')) return
     removeToken()
-    router.push('/login')
+    router.push('/start')
   }
 
   return (

@@ -95,6 +95,12 @@ struct LoginRequest {
     password: String,
 }
 
+#[derive(Deserialize)]
+struct IndividualAuthRequest {
+    email: String,
+    password: String,
+}
+
 #[derive(Serialize)]
 struct AuthResponse {
     token: String,
@@ -232,6 +238,9 @@ async fn main() {
                 .delete(admin_tool_delete_org_handler),
         )
         .route("/api/adminTool/organizations/{id}/staff", get(admin_tool_list_staff_handler))
+        // 個人ユーザー
+        .route("/api/individual/register", post(individual_register_handler))
+        .route("/api/individual/login", post(individual_login_handler))
         // 施設ユーザー
         .route("/api/auth/signup", post(signup_handler))
         .route("/api/auth/login", post(login_handler))
@@ -480,6 +489,55 @@ async fn signup_handler(
         org_name: body.org_name,
         role: "admin".to_string(),
     }))
+}
+
+async fn individual_register_handler(
+    State(state): State<AppState>,
+    Json(body): Json<IndividualAuthRequest>,
+) -> Result<Json<TokenResponse>, (StatusCode, String)> {
+    if db::find_individual_user_by_email(&state.db, &body.email)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .is_some()
+    {
+        return Err((StatusCode::CONFLICT, "このメールアドレスはすでに登録されています".to_string()));
+    }
+
+    let password_hash = hash_password(&body.password).await?;
+    let (user_id, org_id) = db::create_individual_user(&state.db, &body.email, &password_hash)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let token = create_token(user_id, org_id, "individual", &body.email, &state.jwt_secret)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(TokenResponse { token }))
+}
+
+async fn individual_login_handler(
+    State(state): State<AppState>,
+    Json(body): Json<IndividualAuthRequest>,
+) -> Result<Json<TokenResponse>, (StatusCode, String)> {
+    let user = db::find_individual_user_by_email(&state.db, &body.email)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "メールアドレスまたはパスワードが正しくありません".to_string()))?;
+
+    let hash = user.password_hash.clone();
+    let password = body.password.clone();
+    let valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &hash))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !valid {
+        return Err((StatusCode::UNAUTHORIZED, "メールアドレスまたはパスワードが正しくありません".to_string()));
+    }
+
+    let token = create_token(user.id, user.organization_id, "individual", &user.name, &state.jwt_secret)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(TokenResponse { token }))
 }
 
 async fn login_handler(

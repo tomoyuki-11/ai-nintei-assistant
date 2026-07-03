@@ -26,7 +26,7 @@ export default function HamburgerMenu() {
     setOpen(false)
     if (!confirm('ログアウトしますか？')) return
     removeToken()
-    router.push('/login')
+    router.push('/start')
   }
 
   return (
