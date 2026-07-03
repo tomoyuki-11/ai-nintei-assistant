@@ -27,6 +27,8 @@ pub struct AppState {
     pub stripe_webhook_secret: String,
     pub stripe_price_id: String,
     pub stripe_credit_price_id: String,
+    pub stripe_individual_price_id: String,
+    pub stripe_individual_credit_price_id: String,
     pub http_client: reqwest::Client,
 }
 
@@ -195,6 +197,10 @@ async fn main() {
     let stripe_webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_default();
     let stripe_price_id = std::env::var("STRIPE_PRICE_ID").unwrap_or_default();
     let stripe_credit_price_id = std::env::var("STRIPE_CREDIT_PRICE_ID").unwrap_or_default();
+    let stripe_individual_price_id = std::env::var("STRIPE_INDIVIDUAL_PRICE_ID")
+        .unwrap_or_else(|_| std::env::var("STRIPE_PRICE_ID").unwrap_or_default());
+    let stripe_individual_credit_price_id = std::env::var("STRIPE_INDIVIDUAL_CREDIT_PRICE_ID")
+        .unwrap_or_else(|_| std::env::var("STRIPE_CREDIT_PRICE_ID").unwrap_or_default());
 
     tracing::info!("DATABASE_URL: {}", database_url);
     tracing::info!("ANTHROPIC_API_KEY: set");
@@ -219,6 +225,8 @@ async fn main() {
         stripe_webhook_secret,
         stripe_price_id,
         stripe_credit_price_id,
+        stripe_individual_price_id,
+        stripe_individual_credit_price_id,
         http_client: reqwest::Client::new(),
     };
 
@@ -903,7 +911,12 @@ async fn create_checkout_session_handler(
     if state.stripe_secret_key.is_empty() {
         return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe未設定です".to_string()));
     }
-    if state.stripe_price_id.is_empty() {
+    let price_id = if auth.role == "individual" {
+        &state.stripe_individual_price_id
+    } else {
+        &state.stripe_price_id
+    };
+    if price_id.is_empty() {
         return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe Price ID未設定です".to_string()));
     }
 
@@ -915,7 +928,7 @@ async fn create_checkout_session_handler(
 
     let params: &[(&str, &str)] = &[
         ("mode", "subscription"),
-        ("line_items[0][price]", state.stripe_price_id.as_str()),
+        ("line_items[0][price]", price_id.as_str()),
         ("line_items[0][quantity]", "1"),
         ("success_url", success_url.as_str()),
         ("cancel_url", cancel_url.as_str()),
@@ -960,7 +973,12 @@ async fn create_credit_checkout_handler(
     if state.stripe_secret_key.is_empty() {
         return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe未設定です".to_string()));
     }
-    if state.stripe_credit_price_id.is_empty() {
+    let credit_price_id = if auth.role == "individual" {
+        &state.stripe_individual_credit_price_id
+    } else {
+        &state.stripe_credit_price_id
+    };
+    if credit_price_id.is_empty() {
         return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe Credit Price ID未設定です".to_string()));
     }
 
@@ -972,7 +990,7 @@ async fn create_credit_checkout_handler(
 
     let params: &[(&str, &str)] = &[
         ("mode", "payment"),
-        ("line_items[0][price]", state.stripe_credit_price_id.as_str()),
+        ("line_items[0][price]", credit_price_id.as_str()),
         ("line_items[0][quantity]", "1"),
         ("success_url", success_url.as_str()),
         ("cancel_url", cancel_url.as_str()),
