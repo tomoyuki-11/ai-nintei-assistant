@@ -912,9 +912,9 @@ async fn create_checkout_session_handler(
         return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe未設定です".to_string()));
     }
     let price_id = if auth.role == "individual" {
-        &state.stripe_individual_price_id
+        if !state.stripe_individual_price_id.is_empty() { &state.stripe_individual_price_id } else { &state.stripe_price_id }
     } else {
-        &state.stripe_price_id
+        if !state.stripe_price_id.is_empty() { &state.stripe_price_id } else { &state.stripe_individual_price_id }
     };
     if price_id.is_empty() {
         return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe Price ID未設定です".to_string()));
@@ -974,9 +974,9 @@ async fn create_credit_checkout_handler(
         return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe未設定です".to_string()));
     }
     let credit_price_id = if auth.role == "individual" {
-        &state.stripe_individual_credit_price_id
+        if !state.stripe_individual_credit_price_id.is_empty() { &state.stripe_individual_credit_price_id } else { &state.stripe_credit_price_id }
     } else {
-        &state.stripe_credit_price_id
+        if !state.stripe_credit_price_id.is_empty() { &state.stripe_credit_price_id } else { &state.stripe_individual_credit_price_id }
     };
     if credit_price_id.is_empty() {
         return Err((StatusCode::SERVICE_UNAVAILABLE, "Stripe Credit Price ID未設定です".to_string()));
