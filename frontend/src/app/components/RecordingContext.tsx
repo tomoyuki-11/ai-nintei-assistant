@@ -89,8 +89,9 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           if (res.ok) {
             const data = await res.json()
             const transcribed: string = data.text || ''
-            setText(transcribed)
-            resolve(transcribed)
+            const accumulated = text ? `${text}\n${transcribed}` : transcribed
+            setText(accumulated)
+            resolve(accumulated)
           } else {
             setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
             resolve(text)
