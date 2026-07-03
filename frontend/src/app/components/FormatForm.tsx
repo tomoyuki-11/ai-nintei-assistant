@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { downloadExcel } from '@/lib/excel'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
@@ -18,7 +18,7 @@ type ConfirmState =
 
 export default function FormatForm() {
   const router = useRouter()
-  const { isRecording, isTranscribing, text, setText, recordingError, setRecordingError, startRecording, stopRecording, clearRecording } = useRecording()
+  const { isRecording, isTranscribing, text, setText, recordingError, setRecordingError, pendingAudio, startRecording, stopRecording, transcribeFile, retryTranscription, clearPendingAudio, clearRecording } = useRecording()
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -28,6 +28,8 @@ export default function FormatForm() {
   const [confirm, setConfirm] = useState<ConfirmState>(null)
   const [transcriptionDeclined, setTranscriptionDeclined] = useState(false)
   const [showFormatConfirm, setShowFormatConfirm] = useState(false)
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
@@ -173,6 +175,35 @@ export default function FormatForm() {
         </div>
       )}
 
+      {/* 音声ファイルアップロード確認モーダル */}
+      {pendingUploadFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
+            <p className="text-sm font-semibold text-gray-900 mb-2">音声ファイルをアップロードし文字起こしを行いますか？</p>
+            <p className="text-xs text-gray-500 mb-5 truncate">ファイル：{pendingUploadFile.name}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setPendingUploadFile(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={async () => {
+                  const file = pendingUploadFile
+                  setPendingUploadFile(null)
+                  if (fileInputRef.current) fileInputRef.current.value = ''
+                  await transcribeFile(file)
+                }}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors"
+              >
+                実行する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 確認モーダル */}
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -233,6 +264,43 @@ export default function FormatForm() {
           )}
           {saveMessage && (
             <span className="text-xs text-green-600 font-medium">✓ {saveMessage}</span>
+          )}
+        </div>
+        {/* 音声ファイルアップロード / 録音済み音声リトライ */}
+        <div className="flex items-center gap-2 mt-1">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) setPendingUploadFile(file)
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isTranscribing}
+            className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            音声ファイルをアップロード
+          </button>
+          {pendingAudio && (
+            <button
+              onClick={async () => { await retryTranscription() }}
+              disabled={isTranscribing}
+              className="flex items-center gap-1.5 rounded-full border border-orange-300 bg-orange-50 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors"
+            >
+              録音済み音声を文字起こし
+            </button>
+          )}
+          {pendingAudio && (
+            <button
+              onClick={clearPendingAudio}
+              className="text-xs text-gray-400 hover:text-gray-600"
+            >
+              破棄
+            </button>
           )}
         </div>
         <textarea
