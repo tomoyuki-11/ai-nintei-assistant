@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { downloadExcel } from '@/lib/excel'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
-
-type SpeechRecognitionConstructor = new () => SpeechRecognition
+import { useRecording } from './RecordingContext'
 
 type Settings = {
   transcription_save_mode: 'auto' | 'confirm'
@@ -19,21 +18,16 @@ type ConfirmState =
 
 export default function FormatForm() {
   const router = useRouter()
-  const [text, setText] = useState('')
+  const { isRecording, text, setText, recordingError, setRecordingError, startRecording, stopRecording, clearRecording } = useRecording()
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [isRecording, setIsRecording] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState('')
   const [settings, setSettings] = useState<Settings>({ transcription_save_mode: 'auto', formatted_save_mode: 'auto' })
   const [confirm, setConfirm] = useState<ConfirmState>(null)
   const [transcriptionDeclined, setTranscriptionDeclined] = useState(false)
   const [showFormatConfirm, setShowFormatConfirm] = useState(false)
-
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const baseTextRef = useRef('')
-  const finalAdditionsRef = useRef('')
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
@@ -43,69 +37,22 @@ export default function FormatForm() {
       .catch(() => {})
   }, [router])
 
+  // コンテキストのエラーをローカルのerrorに表示
+  useEffect(() => {
+    if (recordingError) {
+      setError(recordingError)
+      setRecordingError('')
+    }
+  }, [recordingError, setRecordingError])
+
   function showSaveMessage(msg: string) {
     setSaveMessage(msg)
     setTimeout(() => setSaveMessage(''), 3000)
   }
 
-  function startRecording() {
-    const SpeechRecognitionAPI: SpeechRecognitionConstructor | undefined =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-
-    if (!SpeechRecognitionAPI) {
-      setError('このブラウザは音声認識に対応していません。Chrome または Edge をお使いください。')
-      return
-    }
-
-    baseTextRef.current = text
-    finalAdditionsRef.current = ''
-    setTranscriptionDeclined(false)
-
-    const recognition = new SpeechRecognitionAPI()
-    recognition.lang = 'ja-JP'
-    recognition.continuous = true
-    recognition.interimResults = true
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          finalAdditionsRef.current += transcript
-        } else {
-          interim += transcript
-        }
-      }
-      setText(baseTextRef.current + finalAdditionsRef.current + interim)
-    }
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      setIsRecording(false)
-      if (event.error === 'not-allowed') {
-        setError('マイクへのアクセスが拒否されています。ブラウザのアドレスバー左のアイコンからマイクの使用を許可してください。')
-      } else if (event.error === 'audio-capture') {
-        setError('マイクが見つかりません。マイクが接続されているか確認してください。')
-      } else if (event.error === 'network') {
-        setError('音声認識にはインターネット接続が必要です。')
-      } else {
-        setError(`音声認識エラーが発生しました（${event.error}）`)
-      }
-    }
-
-    recognition.onend = () => setIsRecording(false)
-
-    recognitionRef.current = recognition
-    recognition.start()
-    setIsRecording(true)
-  }
-
-  async function stopRecording() {
-    recognitionRef.current?.stop()
-    setIsRecording(false)
-
-    const currentText = baseTextRef.current + finalAdditionsRef.current
+  async function handleStopRecording() {
+    const currentText = await stopRecording()
     if (!currentText.trim()) return
-
     if (settings.transcription_save_mode === 'confirm') {
       setConfirm({ type: 'transcription', text: currentText })
     } else {
@@ -162,6 +109,7 @@ export default function FormatForm() {
         setConfirm({ type: 'formatted', text, formatted: data.formatted, id: savedId })
       } else {
         setSavedId(null)
+        clearRecording()
         showSaveMessage('整形結果を保存しました')
       }
     } catch (e) {
@@ -186,6 +134,7 @@ export default function FormatForm() {
           body: JSON.stringify(payload),
         })
         setSavedId(null)
+        clearRecording()
         showSaveMessage('整形結果を保存しました')
       } catch (e) {
         console.error('Failed to save result:', e)
@@ -263,7 +212,7 @@ export default function FormatForm() {
             </button>
           ) : (
             <button
-              onClick={stopRecording}
+              onClick={handleStopRecording}
               className="flex items-center gap-1.5 rounded-full bg-red-600 px-4 py-1.5 text-sm text-white font-medium animate-pulse"
             >
               <span className="inline-block w-3 h-3 rounded-sm bg-white" /> 録音停止
