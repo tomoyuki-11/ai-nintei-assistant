@@ -274,7 +274,7 @@ export default function HomePage() {
           <div className="text-center py-16 text-gray-400">
             <p className="text-4xl mb-3">📋</p>
             <p className="text-sm">調査履歴がありません</p>
-            <p className="text-xs mt-1">「認定調査を開始する」から始めてください</p>
+            <p className="text-xs mt-1">「認定調査を開始」から始めてください</p>
           </div>
         )}
 
