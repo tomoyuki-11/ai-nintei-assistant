@@ -304,7 +304,7 @@ async fn mark_downloaded_handler(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    db::mark_excel_downloaded(&state.db, id, auth.org_id)
+    db::mark_excel_downloaded(&state.db, id, auth.organization_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
