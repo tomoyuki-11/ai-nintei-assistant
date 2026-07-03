@@ -39,13 +39,19 @@ export default function FormatForm() {
       .catch(() => {})
   }, [router])
 
-  // コンテキストのエラーをローカルのerrorに表示
+  // コンテキストのエラーをローカルのerrorに表示（8秒後に自動消去）
   useEffect(() => {
     if (recordingError) {
       setError(recordingError)
       setRecordingError('')
     }
   }, [recordingError, setRecordingError])
+
+  useEffect(() => {
+    if (!error) return
+    const t = setTimeout(() => setError(''), 8000)
+    return () => clearTimeout(t)
+  }, [error])
 
   function showSaveMessage(msg: string) {
     setSaveMessage(msg)
@@ -321,8 +327,9 @@ export default function FormatForm() {
       </button>
 
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-700">
-          {error}
+        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-700 flex items-start justify-between gap-2">
+          <span>{error}</span>
+          <button onClick={() => setError('')} className="shrink-0 text-red-400 hover:text-red-600 leading-none text-base">✕</button>
         </div>
       )}
 
