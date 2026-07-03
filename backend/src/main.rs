@@ -195,12 +195,12 @@ async fn main() {
         .unwrap_or_else(|_| "superadmin1234".to_string());
     let stripe_secret_key = std::env::var("STRIPE_SECRET_KEY").unwrap_or_default();
     let stripe_webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_default();
-    let stripe_price_id = std::env::var("STRIPE_PRICE_ID").unwrap_or_default();
-    let stripe_credit_price_id = std::env::var("STRIPE_CREDIT_PRICE_ID").unwrap_or_default();
-    let stripe_individual_price_id = std::env::var("STRIPE_INDIVIDUAL_PRICE_ID")
-        .unwrap_or_else(|_| std::env::var("STRIPE_PRICE_ID").unwrap_or_default());
-    let stripe_individual_credit_price_id = std::env::var("STRIPE_INDIVIDUAL_CREDIT_PRICE_ID")
-        .unwrap_or_else(|_| std::env::var("STRIPE_CREDIT_PRICE_ID").unwrap_or_default());
+    let stripe_individual_price_id = std::env::var("STRIPE_INDIVIDUAL_PRICE_ID").unwrap_or_default();
+    let stripe_individual_credit_price_id = std::env::var("STRIPE_INDIVIDUAL_CREDIT_PRICE_ID").unwrap_or_default();
+    let stripe_price_id = std::env::var("STRIPE_PRICE_ID")
+        .unwrap_or_else(|_| stripe_individual_price_id.clone());
+    let stripe_credit_price_id = std::env::var("STRIPE_CREDIT_PRICE_ID")
+        .unwrap_or_else(|_| stripe_individual_credit_price_id.clone());
 
     tracing::info!("DATABASE_URL: {}", database_url);
     tracing::info!("ANTHROPIC_API_KEY: set");
