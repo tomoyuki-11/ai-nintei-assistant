@@ -10,7 +10,7 @@ const EXCLUDED = ['/login', '/licence', '/signup', '/adminTool']
 
 export default function AppHeader() {
   const pathname = usePathname()
-  const { isRecording } = useRecording()
+  const { isRecording, isTranscribing } = useRecording()
 
   if (EXCLUDED.some((p) => pathname === p || pathname.startsWith(p + '/'))) return null
 
@@ -22,6 +22,15 @@ export default function AppHeader() {
           <img src="/images/logo-transparent_1.png" alt="AI認定調査アシスタント" style={{ height: '36px', width: 'auto' }} />
         </Link>
         <div className="flex items-center gap-3">
+          {isTranscribing && (
+            <Link
+              href="/assess"
+              className="flex items-center gap-1.5 rounded-full bg-gray-500 px-3 py-1 text-xs text-white font-medium"
+            >
+              <span className="inline-block w-2 h-2 rounded-full border border-white border-t-transparent animate-spin" />
+              文字起こし中
+            </Link>
+          )}
           {isRecording && (
             <Link
               href="/assess"

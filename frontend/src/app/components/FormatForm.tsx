@@ -18,7 +18,7 @@ type ConfirmState =
 
 export default function FormatForm() {
   const router = useRouter()
-  const { isRecording, text, setText, recordingError, setRecordingError, startRecording, stopRecording, clearRecording } = useRecording()
+  const { isRecording, isTranscribing, text, setText, recordingError, setRecordingError, startRecording, stopRecording, clearRecording } = useRecording()
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -203,7 +203,14 @@ export default function FormatForm() {
 
       <div>
         <div className="flex items-center gap-3 mb-2">
-          {!isRecording ? (
+          {isTranscribing ? (
+            <button
+              disabled
+              className="flex items-center gap-1.5 rounded-full bg-gray-400 px-4 py-1.5 text-sm text-white font-medium cursor-not-allowed"
+            >
+              <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> 文字起こし中...
+            </button>
+          ) : !isRecording ? (
             <button
               onClick={startRecording}
               className="flex items-center gap-1.5 rounded-full bg-red-500 px-4 py-1.5 text-sm text-white font-medium hover:bg-red-600 transition-colors"
@@ -220,6 +227,9 @@ export default function FormatForm() {
           )}
           {isRecording && (
             <span className="text-xs text-red-500 font-medium animate-pulse">録音中...</span>
+          )}
+          {isTranscribing && (
+            <span className="text-xs text-gray-500 font-medium">Whisperで文字起こし中...</span>
           )}
           {saveMessage && (
             <span className="text-xs text-green-600 font-medium">✓ {saveMessage}</span>

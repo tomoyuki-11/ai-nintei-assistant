@@ -1,11 +1,11 @@
 'use client'
 
 import { createContext, useContext, useRef, useState, useCallback } from 'react'
-
-type SpeechRecognitionConstructor = new () => SpeechRecognition
+import { authHeaders } from '@/lib/auth'
 
 type RecordingContextType = {
   isRecording: boolean
+  isTranscribing: boolean
   text: string
   setText: (text: string) => void
   recordingError: string
@@ -19,90 +19,103 @@ const RecordingContext = createContext<RecordingContextType | null>(null)
 
 export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const [isRecording, setIsRecording] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
   const [text, setText] = useState('')
   const [recordingError, setRecordingError] = useState('')
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const baseTextRef = useRef('')
-  const finalAdditionsRef = useRef('')
-  const shouldRecordRef = useRef(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
 
-  const startRecording = useCallback(() => {
-    const SpeechRecognitionAPI: SpeechRecognitionConstructor | undefined =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
 
-    if (!SpeechRecognitionAPI) {
-      setRecordingError('このブラウザは音声認識に対応していません。Chrome または Edge をお使いください。')
-      return
-    }
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/ogg'
 
-    shouldRecordRef.current = true
-    baseTextRef.current = text
-    finalAdditionsRef.current = ''
+      const mediaRecorder = new MediaRecorder(stream, { mimeType })
+      mediaRecorderRef.current = mediaRecorder
+      chunksRef.current = []
 
-    const recognition = new SpeechRecognitionAPI()
-    recognition.lang = 'ja-JP'
-    recognition.continuous = true
-    recognition.interimResults = true
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          finalAdditionsRef.current += transcript
-        } else {
-          interim += transcript
-        }
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data)
       }
-      setText(baseTextRef.current + finalAdditionsRef.current + interim)
-    }
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error === 'no-speech') return  // 無音タイムアウトは自動再起動で対処
-      shouldRecordRef.current = false
-      setIsRecording(false)
-      if (event.error === 'not-allowed') {
+      mediaRecorder.start(1000)
+      setIsRecording(true)
+      setRecordingError('')
+    } catch (e: any) {
+      if (e.name === 'NotAllowedError') {
         setRecordingError('マイクへのアクセスが拒否されています。ブラウザのアドレスバー左のアイコンからマイクの使用を許可してください。')
-      } else if (event.error === 'audio-capture') {
+      } else if (e.name === 'NotFoundError') {
         setRecordingError('マイクが見つかりません。マイクが接続されているか確認してください。')
-      } else if (event.error === 'network') {
-        setRecordingError('音声認識にはインターネット接続が必要です。')
       } else {
-        setRecordingError(`音声認識エラーが発生しました（${event.error}）`)
+        setRecordingError(`録音エラーが発生しました（${e.name}）`)
       }
     }
-
-    recognition.onend = () => {
-      if (shouldRecordRef.current) {
-        // 録音継続中なら自動再起動
-        try { recognition.start() } catch {}
-      } else {
-        setIsRecording(false)
-      }
-    }
-
-    recognitionRef.current = recognition
-    recognition.start()
-    setIsRecording(true)
-    setRecordingError('')
-  }, [text])
+  }, [])
 
   const stopRecording = useCallback(async (): Promise<string> => {
-    shouldRecordRef.current = false
-    recognitionRef.current?.stop()
-    setIsRecording(false)
-    return baseTextRef.current + finalAdditionsRef.current
-  }, [])
+    const mediaRecorder = mediaRecorderRef.current
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+      setIsRecording(false)
+      return text
+    }
+
+    return new Promise((resolve) => {
+      mediaRecorder.onstop = async () => {
+        streamRef.current?.getTracks().forEach((t) => t.stop())
+        setIsRecording(false)
+        setIsTranscribing(true)
+
+        try {
+          const mimeType = chunksRef.current[0]?.type || 'audio/webm'
+          const blob = new Blob(chunksRef.current, { type: mimeType })
+          const ext = mimeType.includes('ogg') ? 'ogg' : 'webm'
+
+          const formData = new FormData()
+          formData.append('audio', blob, `audio.${ext}`)
+
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/transcribe`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: formData,
+          })
+
+          if (res.ok) {
+            const data = await res.json()
+            const transcribed: string = data.text || ''
+            setText(transcribed)
+            resolve(transcribed)
+          } else {
+            setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
+            resolve(text)
+          }
+        } catch {
+          setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
+          resolve(text)
+        } finally {
+          setIsTranscribing(false)
+        }
+      }
+
+      mediaRecorder.stop()
+    })
+  }, [text])
 
   const clearRecording = useCallback(() => {
     setText('')
-    baseTextRef.current = ''
-    finalAdditionsRef.current = ''
+    chunksRef.current = []
   }, [])
 
   return (
     <RecordingContext.Provider value={{
       isRecording,
+      isTranscribing,
       text,
       setText,
       recordingError,

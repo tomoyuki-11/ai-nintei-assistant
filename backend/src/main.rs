@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Multipart, Path, State},
     http::{Method, StatusCode},
     routing::{get, post},
     Json, Router,
@@ -30,6 +30,7 @@ pub struct AppState {
     pub stripe_individual_price_id: String,
     pub stripe_individual_credit_price_id: String,
     pub http_client: reqwest::Client,
+    pub openai_api_key: String,
 }
 
 // ─── Request / Response types ─────────────────────────────────────────────────
@@ -197,6 +198,7 @@ async fn main() {
     let stripe_webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_default();
     let stripe_individual_price_id = std::env::var("STRIPE_INDIVIDUAL_PRICE_ID").unwrap_or_default();
     let stripe_individual_credit_price_id = std::env::var("STRIPE_INDIVIDUAL_CREDIT_PRICE_ID").unwrap_or_default();
+    let openai_api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
     let stripe_price_id = std::env::var("STRIPE_PRICE_ID")
         .unwrap_or_else(|_| stripe_individual_price_id.clone());
     let stripe_credit_price_id = std::env::var("STRIPE_CREDIT_PRICE_ID")
@@ -228,6 +230,7 @@ async fn main() {
         stripe_individual_price_id,
         stripe_individual_credit_price_id,
         http_client: reqwest::Client::new(),
+        openai_api_key,
     };
 
     let cors = CorsLayer::new()
@@ -262,6 +265,7 @@ async fn main() {
         .route("/api/webhook/stripe", post(stripe_webhook_handler))
         .route("/api/save-result", post(save_result_handler))
         .route("/api/transcription", post(save_transcription_handler))
+        .route("/api/transcribe", post(transcribe_handler))
         .route("/api/format", post(format_handler))
         .route("/api/history", get(history_handler))
         .route(
@@ -276,6 +280,64 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
     tracing::info!("Server running on http://0.0.0.0:8080");
     axum::serve(listener, app).await.unwrap();
+}
+
+// ─── Whisper 文字起こし ───────────────────────────────────────────────────────
+
+async fn transcribe_handler(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    mut multipart: Multipart,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if state.openai_api_key.is_empty() {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "OPENAI_API_KEY が設定されていません".to_string()));
+    }
+
+    let mut audio_bytes: Option<Vec<u8>> = None;
+    let mut mime_type = "audio/webm".to_string();
+
+    while let Some(field) = multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
+        if field.name().unwrap_or("") == "audio" {
+            mime_type = field.content_type().unwrap_or("audio/webm").to_string();
+            let data = field.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+            audio_bytes = Some(data.to_vec());
+        }
+    }
+
+    let audio_data = audio_bytes.ok_or_else(|| (StatusCode::BAD_REQUEST, "音声データが見つかりません".to_string()))?;
+
+    let ext = if mime_type.contains("ogg") { "ogg" } else { "webm" };
+    let filename = format!("audio.{}", ext);
+
+    let part = reqwest::multipart::Part::bytes(audio_data)
+        .file_name(filename)
+        .mime_str(&mime_type)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let form = reqwest::multipart::Form::new()
+        .part("file", part)
+        .text("model", "whisper-1")
+        .text("language", "ja");
+
+    let response = state.http_client
+        .post("https://api.openai.com/v1/audio/transcriptions")
+        .header("Authorization", format!("Bearer {}", state.openai_api_key))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        tracing::error!("Whisper API error {}: {}", status, body);
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "文字起こしに失敗しました".to_string()));
+    }
+
+    let data: serde_json::Value = response.json().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({ "text": data["text"] })))
 }
 
 // ─── ヘルス ───────────────────────────────────────────────────────────────────
