@@ -24,6 +24,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const baseTextRef = useRef('')
   const finalAdditionsRef = useRef('')
+  const shouldRecordRef = useRef(false)
 
   const startRecording = useCallback(() => {
     const SpeechRecognitionAPI: SpeechRecognitionConstructor | undefined =
@@ -34,6 +35,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
+    shouldRecordRef.current = true
     baseTextRef.current = text
     finalAdditionsRef.current = ''
 
@@ -56,6 +58,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      if (event.error === 'no-speech') return  // 無音タイムアウトは自動再起動で対処
+      shouldRecordRef.current = false
       setIsRecording(false)
       if (event.error === 'not-allowed') {
         setRecordingError('マイクへのアクセスが拒否されています。ブラウザのアドレスバー左のアイコンからマイクの使用を許可してください。')
@@ -68,7 +72,14 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    recognition.onend = () => setIsRecording(false)
+    recognition.onend = () => {
+      if (shouldRecordRef.current) {
+        // 録音継続中なら自動再起動
+        try { recognition.start() } catch {}
+      } else {
+        setIsRecording(false)
+      }
+    }
 
     recognitionRef.current = recognition
     recognition.start()
@@ -77,6 +88,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   }, [text])
 
   const stopRecording = useCallback(async (): Promise<string> => {
+    shouldRecordRef.current = false
     recognitionRef.current?.stop()
     setIsRecording(false)
     return baseTextRef.current + finalAdditionsRef.current
