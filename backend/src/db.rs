@@ -387,7 +387,10 @@ pub async fn get_org_credits(pool: &PgPool, org_id: Uuid) -> Result<i32, sqlx::E
 
 pub async fn add_credits(pool: &PgPool, org_id: Uuid, amount: i32) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE organizations SET metered_credits = metered_credits + $1 WHERE id = $2",
+        "UPDATE organizations
+         SET metered_credits = metered_credits + $1,
+             plan = CASE WHEN plan = 'trial' THEN 'metered' ELSE plan END
+         WHERE id = $2",
     )
     .bind(amount)
     .bind(org_id)
