@@ -75,7 +75,13 @@ export default function PlanPage() {
                 <p>残り <span className="font-medium text-gray-900">{status.days_remaining}日</span>（{status.monthly_limit !== null ? `残り${status.monthly_limit - status.monthly_usage}回` : ''}）</p>
               )}
               {status.plan === 'monthly' && (
-                <p>今月の利用：<span className="font-medium text-gray-900">{status.monthly_usage} / {status.monthly_limit}回</span></p>
+                <div className="space-y-0.5">
+                  <p>今月の利用：<span className="font-medium text-gray-900">{status.monthly_usage} / {status.monthly_limit}回</span>
+                    {status.credits !== null && status.credits > 0 && (
+                      <span className="ml-2 text-blue-600 font-medium">＋クレジット {status.credits}回分</span>
+                    )}
+                  </p>
+                </div>
               )}
               {status.plan === 'metered' && status.credits !== null && (
                 <p>残りクレジット：<span className="font-medium text-gray-900">{status.credits}回分</span></p>
