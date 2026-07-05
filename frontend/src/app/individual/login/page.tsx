@@ -31,7 +31,7 @@ export default function IndividualLoginPage() {
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
       setToken(data.token)
-      router.push('/')
+      router.push(data.is_first_login ? '/individual/plan-select' : '/')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'ログインに失敗しました')
     } finally {

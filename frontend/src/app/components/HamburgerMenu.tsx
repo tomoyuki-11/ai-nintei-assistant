@@ -61,6 +61,15 @@ export default function HamburgerMenu() {
               スタッフ管理
             </Link>
           )}
+          {isIndividual && (
+            <Link
+              href="/plan"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              料金プラン
+            </Link>
+          )}
           {(isAdmin || isIndividual) && (
             <Link
               href="/settings"

@@ -433,17 +433,38 @@ pub async fn revert_org_plan_by_customer(pool: &PgPool, stripe_customer_id: &str
     Ok(())
 }
 
+#[derive(sqlx::FromRow)]
+pub struct IndividualUser {
+    pub id: Uuid,
+    pub organization_id: Uuid,
+    pub password_hash: String,
+    pub role: String,
+    pub name: String,
+    pub is_first_login: bool,
+}
+
 pub async fn find_individual_user_by_email(
     pool: &PgPool,
     email: &str,
-) -> Result<Option<User>, sqlx::Error> {
-    sqlx::query_as::<_, User>(
-        "SELECT id, organization_id, password_hash, role, name
+) -> Result<Option<IndividualUser>, sqlx::Error> {
+    sqlx::query_as::<_, IndividualUser>(
+        "SELECT id, organization_id, password_hash, role, name, is_first_login
          FROM users WHERE email = $1 AND role = 'individual'",
     )
     .bind(email)
     .fetch_optional(pool)
     .await
+}
+
+pub async fn complete_individual_onboarding(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE users SET is_first_login = false WHERE id = $1")
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 pub async fn create_individual_user(
@@ -463,8 +484,8 @@ pub async fn create_individual_user(
     let org_id = org_row.0;
 
     let user_row: (Uuid,) = sqlx::query_as(
-        "INSERT INTO users (organization_id, email, password_hash, role, name)
-         VALUES ($1, $2, $3, 'individual', $2) RETURNING id",
+        "INSERT INTO users (organization_id, email, password_hash, role, name, is_first_login)
+         VALUES ($1, $2, $3, 'individual', $2, true) RETURNING id",
     )
     .bind(org_id)
     .bind(email)

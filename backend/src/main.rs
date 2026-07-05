@@ -105,6 +105,12 @@ struct IndividualAuthRequest {
 }
 
 #[derive(Serialize)]
+struct IndividualAuthResponse {
+    token: String,
+    is_first_login: bool,
+}
+
+#[derive(Serialize)]
 struct AuthResponse {
     token: String,
     org_name: String,
@@ -266,6 +272,7 @@ async fn main() {
         // 個人ユーザー
         .route("/api/individual/register", post(individual_register_handler))
         .route("/api/individual/login", post(individual_login_handler))
+        .route("/api/individual/complete-onboarding", post(complete_onboarding_handler))
         // 施設ユーザー
         .route("/api/auth/signup", post(signup_handler))
         .route("/api/auth/login", post(login_handler))
@@ -592,7 +599,7 @@ async fn signup_handler(
 async fn individual_register_handler(
     State(state): State<AppState>,
     Json(body): Json<IndividualAuthRequest>,
-) -> Result<Json<TokenResponse>, (StatusCode, String)> {
+) -> Result<Json<IndividualAuthResponse>, (StatusCode, String)> {
     if db::find_individual_user_by_email(&state.db, &body.email)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -609,13 +616,13 @@ async fn individual_register_handler(
     let token = create_token(user_id, org_id, "individual", &body.email, &state.jwt_secret)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(TokenResponse { token }))
+    Ok(Json(IndividualAuthResponse { token, is_first_login: true }))
 }
 
 async fn individual_login_handler(
     State(state): State<AppState>,
     Json(body): Json<IndividualAuthRequest>,
-) -> Result<Json<TokenResponse>, (StatusCode, String)> {
+) -> Result<Json<IndividualAuthResponse>, (StatusCode, String)> {
     let user = db::find_individual_user_by_email(&state.db, &body.email)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -632,10 +639,21 @@ async fn individual_login_handler(
         return Err((StatusCode::UNAUTHORIZED, "メールアドレスまたはパスワードが正しくありません".to_string()));
     }
 
+    let is_first_login = user.is_first_login;
     let token = create_token(user.id, user.organization_id, "individual", &user.name, &state.jwt_secret)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(TokenResponse { token }))
+    Ok(Json(IndividualAuthResponse { token, is_first_login }))
+}
+
+async fn complete_onboarding_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<StatusCode, (StatusCode, String)> {
+    db::complete_individual_onboarding(&state.db, auth.user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn login_handler(
