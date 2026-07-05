@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { authHeaders, isAuthenticated } from '@/lib/auth'
+import { authHeaders, isAuthenticated, getTokenPayload } from '@/lib/auth'
 
 type PlanStatus = {
   plan: string
@@ -68,7 +68,32 @@ export default function PlanBanner() {
 
   if (!status) return null
 
+  const isIndividual = getTokenPayload()?.role === 'individual'
+
   if (status.is_expired) {
+    if (isIndividual) {
+      return (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-2 flex items-center justify-between text-xs text-red-700">
+          <span className="font-medium">トライアル期間が終了しました。プランを選択してください。</span>
+          <span className="flex items-center gap-2">
+            <button
+              onClick={handleCreditPurchase}
+              disabled={purchasing}
+              className="rounded-md bg-blue-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {purchasing ? '処理中...' : '従量課金で始める'}
+            </button>
+            <button
+              onClick={handleUpgrade}
+              disabled={upgrading}
+              className="rounded-md bg-purple-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
+            >
+              {upgrading ? '処理中...' : '月額プランに申し込む'}
+            </button>
+          </span>
+        </div>
+      )
+    }
     return (
       <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-xs text-red-700 text-center font-medium">
         ライセンスの有効期限が切れています。管理者にお問い合わせください。
@@ -90,20 +115,43 @@ export default function PlanBanner() {
           トライアル期間中
           {status.days_remaining !== null && ` — 残り ${Math.max(0, status.days_remaining)} 日`}
         </span>
-        <span className="flex items-center gap-3">
+        <span className="flex items-center gap-2">
           <span>
             使用: {status.monthly_usage} / {status.monthly_limit} 回
             {status.is_limit_reached && <span className="ml-1 font-semibold">（上限到達）</span>}
           </span>
-          <button
-            onClick={handleUpgrade}
-            disabled={upgrading}
-            className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium disabled:opacity-50 transition-colors ${
-              isWarning ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
-            {upgrading ? '処理中...' : 'プランをアップグレード'}
-          </button>
+          {isIndividual ? (
+            <>
+              <button
+                onClick={handleCreditPurchase}
+                disabled={purchasing}
+                className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium disabled:opacity-50 transition-colors ${
+                  isWarning ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'
+                }`}
+              >
+                {purchasing ? '処理中...' : '従量課金'}
+              </button>
+              <button
+                onClick={handleUpgrade}
+                disabled={upgrading}
+                className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium disabled:opacity-50 transition-colors ${
+                  isWarning ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                {upgrading ? '処理中...' : '月額プラン'}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleUpgrade}
+              disabled={upgrading}
+              className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium disabled:opacity-50 transition-colors ${
+                isWarning ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {upgrading ? '処理中...' : 'プランをアップグレード'}
+            </button>
+          )}
         </span>
       </div>
     )
