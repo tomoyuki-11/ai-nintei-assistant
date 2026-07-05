@@ -143,19 +143,19 @@ export default function PlanBanner() {
       }`}>
         <span>
           今月の使用: {status.monthly_usage} / {status.monthly_limit} 回
+          {status.credits !== null && status.credits > 0 && (
+            <span className="ml-2 text-blue-600 font-medium">＋クレジット {status.credits}回分</span>
+          )}
           {status.is_limit_reached && <span className="ml-1 font-semibold">（上限到達）</span>}
         </span>
         {status.is_limit_reached && (
-          <span className="flex items-center gap-3">
-            <span>追加クレジット: <span className="font-semibold">{status.credits ?? 0} 回</span></span>
-            <button
-              onClick={handleCreditPurchase}
-              disabled={purchasing}
-              className="rounded-md bg-orange-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
-            >
-              {purchasing ? '処理中...' : 'クレジットを購入（¥600/回）'}
-            </button>
-          </span>
+          <button
+            onClick={handleCreditPurchase}
+            disabled={purchasing}
+            className="rounded-md bg-orange-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
+          >
+            {purchasing ? '処理中...' : 'クレジットを購入（¥600/回）'}
+          </button>
         )}
       </div>
     )
