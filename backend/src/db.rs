@@ -17,6 +17,8 @@ pub struct Organization {
     pub created_at: DateTime<Utc>,
     pub transcription_save_mode: String,
     pub formatted_save_mode: String,
+    pub subscription_cancel_at: Option<DateTime<Utc>>,
+    pub stripe_subscription_id: Option<String>,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -63,7 +65,7 @@ pub async fn get_organization(
     id: Uuid,
 ) -> Result<Option<Organization>, sqlx::Error> {
     sqlx::query_as::<_, Organization>(
-        "SELECT id, name, system_prompt, plan, license_expires_at, is_active, license_key, created_at, transcription_save_mode, formatted_save_mode
+        "SELECT id, name, system_prompt, plan, license_expires_at, is_active, license_key, created_at, transcription_save_mode, formatted_save_mode, subscription_cancel_at, stripe_subscription_id
          FROM organizations WHERE id = $1",
     )
     .bind(id)
@@ -73,8 +75,12 @@ pub async fn get_organization(
 
 pub async fn list_all_organizations(pool: &PgPool) -> Result<Vec<Organization>, sqlx::Error> {
     sqlx::query_as::<_, Organization>(
-        "SELECT id, name, system_prompt, plan, license_expires_at, is_active, license_key, created_at, transcription_save_mode, formatted_save_mode
-         FROM organizations ORDER BY created_at DESC",
+        "SELECT id, name, system_prompt, plan, license_expires_at, is_active, license_key, created_at, transcription_save_mode, formatted_save_mode, subscription_cancel_at, stripe_subscription_id
+         FROM organizations
+         WHERE id NOT IN (
+             SELECT organization_id FROM users WHERE role = 'individual'
+         )
+         ORDER BY created_at DESC",
     )
     .fetch_all(pool)
     .await
@@ -426,9 +432,36 @@ pub async fn upgrade_org_to_monthly(
     Ok(())
 }
 
+pub async fn get_stripe_customer_id(pool: &PgPool, org_id: Uuid) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(Option<String>,)> = sqlx::query_as(
+        "SELECT stripe_customer_id FROM organizations WHERE id = $1",
+    )
+    .bind(org_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.and_then(|(v,)| v))
+}
+
+pub async fn set_subscription_cancel_at(
+    pool: &PgPool,
+    stripe_customer_id: &str,
+    cancel_at: Option<DateTime<Utc>>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE organizations SET subscription_cancel_at = $1 WHERE stripe_customer_id = $2",
+    )
+    .bind(cancel_at)
+    .bind(stripe_customer_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn revert_org_plan_by_customer(pool: &PgPool, stripe_customer_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE organizations SET plan = 'trial', stripe_subscription_id = NULL WHERE stripe_customer_id = $1",
+        "UPDATE organizations
+         SET plan = 'metered', stripe_subscription_id = NULL, subscription_cancel_at = NULL
+         WHERE stripe_customer_id = $1",
     )
     .bind(stripe_customer_id)
     .execute(pool)
@@ -497,6 +530,29 @@ pub async fn create_individual_user(
     .await?;
 
     Ok((user_row.0, org_id))
+}
+
+#[derive(sqlx::FromRow, serde::Serialize)]
+pub struct IndividualUserAdmin {
+    pub id: Uuid,
+    pub email: String,
+    pub plan: String,
+    pub credits: i32,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub license_expires_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+pub async fn list_individual_users(pool: &PgPool) -> Result<Vec<IndividualUserAdmin>, sqlx::Error> {
+    sqlx::query_as::<_, IndividualUserAdmin>(
+        "SELECT u.id, u.email, o.plan, COALESCE(o.metered_credits, 0) as credits,
+                u.created_at, o.license_expires_at
+         FROM users u
+         JOIN organizations o ON o.id = u.organization_id
+         WHERE u.role = 'individual'
+         ORDER BY u.created_at DESC",
+    )
+    .fetch_all(pool)
+    .await
 }
 
 pub async fn list_transcriptions(

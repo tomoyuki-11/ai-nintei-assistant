@@ -18,6 +18,15 @@ type StaffMember = {
   created_at: string;
 };
 
+type IndividualUser = {
+  id: string;
+  email: string;
+  plan: string;
+  credits: number;
+  created_at: string;
+  license_expires_at: string | null;
+};
+
 type Organization = {
   id: string;
   name: string;
@@ -80,6 +89,7 @@ export default function SuperAdminPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!getSuperAdminToken());
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [activeTab, setActiveTab] = useState<"orgs" | "individuals">("orgs");
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -103,6 +113,9 @@ export default function SuperAdminPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [individualUsers, setIndividualUsers] = useState<IndividualUser[]>([]);
+  const [individualLoading, setIndividualLoading] = useState(false);
+  const [individualError, setIndividualError] = useState('');
 
   function copyLicenseKey(orgId: string, key: string) {
     navigator.clipboard.writeText(key);
@@ -113,6 +126,31 @@ export default function SuperAdminPage() {
   useEffect(() => {
     if (isLoggedIn) loadOrgs();
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (isLoggedIn && activeTab === "individuals") loadIndividualUsers();
+  }, [isLoggedIn, activeTab]);
+
+  async function loadIndividualUsers() {
+    setIndividualLoading(true);
+    setIndividualError('');
+    try {
+      const res = await fetch(`${API}/api/adminTool/individual-users`, {
+        headers: superAdminHeaders(),
+      });
+      if (res.status === 401) {
+        removeSuperAdminToken();
+        setIsLoggedIn(false);
+        return;
+      }
+      if (!res.ok) throw new Error(await res.text());
+      setIndividualUsers(await res.json());
+    } catch (e) {
+      setIndividualError(e instanceof Error ? e.message : 'データの取得に失敗しました');
+    } finally {
+      setIndividualLoading(false);
+    }
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -308,6 +346,83 @@ export default function SuperAdminPage() {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-8">
+        {/* タブ */}
+        <div className="flex gap-1 mb-6 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab("orgs")}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              activeTab === "orgs"
+                ? "bg-white border border-b-white border-gray-200 text-gray-900 -mb-px"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            施設一覧
+            <span className="ml-1.5 text-xs text-gray-400">({orgs.length}件)</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("individuals")}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              activeTab === "individuals"
+                ? "bg-white border border-b-white border-gray-200 text-gray-900 -mb-px"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            個人一覧
+            <span className="ml-1.5 text-xs text-gray-400">({individualUsers.length}件)</span>
+          </button>
+        </div>
+
+        {activeTab === "individuals" && (
+          <div>
+            {individualError && (
+              <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 flex items-center justify-between">
+                <p className="text-sm text-red-700 font-medium">{individualError}</p>
+                <button
+                  onClick={loadIndividualUsers}
+                  className="ml-4 shrink-0 rounded-lg bg-red-100 px-3 py-1.5 text-xs text-red-700 hover:bg-red-200 transition-colors"
+                >再読み込み</button>
+              </div>
+            )}
+            {individualLoading ? (
+              <p className="text-sm text-gray-400">読み込み中...</p>
+            ) : (
+              <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                {individualUsers.length === 0 ? (
+                  <p className="text-sm text-gray-400 px-5 py-6">個人ユーザーはいません</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
+                        <th className="text-left px-5 py-3 font-medium">メールアドレス</th>
+                        <th className="text-left px-5 py-3 font-medium">プラン</th>
+                        <th className="text-left px-5 py-3 font-medium">クレジット</th>
+                        <th className="text-left px-5 py-3 font-medium">トライアル期限</th>
+                        <th className="text-left px-5 py-3 font-medium">登録日</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {individualUsers.map((user, i) => (
+                        <tr key={user.id} className={`border-b border-gray-50 ${i % 2 === 0 ? '' : 'bg-gray-50/50'}`}>
+                          <td className="px-5 py-3 font-medium text-gray-900">{user.email}</td>
+                          <td className="px-5 py-3">
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PLAN_COLORS[user.plan] ?? 'bg-gray-100 text-gray-600'}`}>
+                              {PLAN_LABELS[user.plan] ?? user.plan}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-gray-700">{user.credits}回</td>
+                          <td className="px-5 py-3 text-gray-500">{formatDate(user.license_expires_at)}</td>
+                          <td className="px-5 py-3 text-gray-500">{new Date(user.created_at).toLocaleDateString('ja-JP')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "orgs" && <>
         {/* 新規施設作成 */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900">
@@ -748,6 +863,7 @@ export default function SuperAdminPage() {
             ))}
           </div>
         )}
+        </>}
       </div>
     </main>
   );

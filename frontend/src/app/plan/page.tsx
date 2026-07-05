@@ -14,6 +14,7 @@ type PlanStatus = {
   monthly_limit: number | null
   is_limit_reached: boolean
   credits: number | null
+  subscription_cancel_at: string | null
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -26,7 +27,7 @@ const PLAN_LABELS: Record<string, string> = {
 export default function PlanPage() {
   const router = useRouter()
   const [status, setStatus] = useState<PlanStatus | null>(null)
-  const [loading, setLoading] = useState<string | null>(null)
+  const [loading, setLoading] = useState<'monthly' | 'credit' | 'portal' | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -40,22 +41,23 @@ export default function PlanPage() {
       .catch(() => {})
   }, [router])
 
-  async function handleStripe(type: 'monthly' | 'credit') {
+  async function handleStripe(type: 'monthly' | 'credit' | 'portal') {
     setLoading(type)
     setError('')
     try {
-      const endpoint = type === 'monthly'
-        ? '/api/stripe/create-checkout-session'
-        : '/api/stripe/create-credit-checkout'
+      const endpoint =
+        type === 'monthly' ? '/api/stripe/create-checkout-session'
+        : type === 'credit' ? '/api/stripe/create-credit-checkout'
+        : '/api/stripe/customer-portal'
       const res = await fetch(`${API}${endpoint}`, {
         method: 'POST',
         headers: authHeaders(),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
       window.location.href = data.url
-    } catch {
-      setError('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '決済ページへの移動に失敗しました。しばらくしてからお試しください。')
       setLoading(null)
     }
   }
@@ -63,7 +65,7 @@ export default function PlanPage() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8">
       <div className="max-w-md mx-auto">
-        <h1 className="text-xl font-bold text-gray-900 mb-6">料金プラン</h1>
+        <h1 className="text-xl font-bold text-gray-900 mb-6">プラン変更</h1>
 
         {/* 現在のプラン */}
         {status && (
@@ -93,6 +95,24 @@ export default function PlanPage() {
                 <p className="text-orange-600 font-medium">今月の利用上限に達しています</p>
               )}
             </div>
+            {status.plan === 'monthly' && (
+              <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                {status.subscription_cancel_at && (
+                  <p className="text-xs text-orange-600 font-medium">
+                    {new Date(status.subscription_cancel_at).toLocaleDateString('ja-JP', {
+                      year: 'numeric', month: 'long', day: 'numeric'
+                    })}に自動的に従量課金に変更されます
+                  </p>
+                )}
+                <button
+                  onClick={() => handleStripe('portal')}
+                  disabled={loading !== null}
+                  className="text-xs text-gray-400 hover:text-gray-600 hover:underline disabled:opacity-50 transition-colors"
+                >
+                  {loading === 'portal' ? '処理中...' : '解約・プラン変更はこちら'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -107,7 +127,8 @@ export default function PlanPage() {
                 <h2 className="text-base font-bold text-gray-900">従量課金</h2>
               </div>
               <div className="text-right">
-                <span className="text-xl font-bold text-gray-900">都度購入</span>
+                <span className="text-2xl font-bold text-gray-900">¥600</span>
+                <span className="text-sm text-gray-500"> / 回</span>
               </div>
             </div>
             <ul className="text-sm text-gray-600 space-y-1 mb-4">
@@ -120,7 +141,7 @@ export default function PlanPage() {
               disabled={loading !== null}
               className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              {loading === 'credit' ? '処理中...' : 'クレジットを購入する'}
+              {loading === 'credit' ? '処理中...' : 'クレジットを購入する（¥600/回）'}
             </button>
           </div>
 
@@ -132,12 +153,13 @@ export default function PlanPage() {
                 <h2 className="text-base font-bold text-gray-900">月額プラン</h2>
               </div>
               <div className="text-right">
-                <span className="text-xl font-bold text-gray-900">月額</span>
-                <p className="text-xs text-gray-500">8回/月</p>
+                <span className="text-2xl font-bold text-gray-900">¥2,980</span>
+                <span className="text-sm text-gray-500"> / 月</span>
+                <p className="text-xs text-gray-400 mt-0.5">月8回まで利用可能</p>
               </div>
             </div>
             <ul className="text-sm text-gray-600 space-y-1 mb-4">
-              <li className="flex items-center gap-2"><span className="text-purple-500">✓</span> 月8回まで利用可能</li>
+              <li className="flex items-center gap-2"><span className="text-purple-500">✓</span> 月8回まで利用可能（¥373/回相当）</li>
               <li className="flex items-center gap-2"><span className="text-purple-500">✓</span> 毎月自動更新</li>
               <li className="flex items-center gap-2"><span className="text-purple-500">✓</span> いつでも解約可能</li>
             </ul>

@@ -179,6 +179,7 @@ struct PlanStatusResponse {
     monthly_limit: Option<i32>,
     is_limit_reached: bool,
     credits: Option<i32>,
+    subscription_cancel_at: Option<chrono::DateTime<Utc>>,
 }
 
 const TRIAL_MONTHLY_LIMIT: i32 = 3;
@@ -269,6 +270,7 @@ async fn main() {
                 .delete(admin_tool_delete_org_handler),
         )
         .route("/api/adminTool/organizations/{id}/staff", get(admin_tool_list_staff_handler))
+        .route("/api/adminTool/individual-users", get(admin_tool_list_individual_users_handler))
         // 個人ユーザー
         .route("/api/individual/register", post(individual_register_handler))
         .route("/api/individual/login", post(individual_login_handler))
@@ -283,6 +285,7 @@ async fn main() {
         .route("/api/plan-status", get(plan_status_handler))
         .route("/api/stripe/create-checkout-session", post(create_checkout_session_handler))
         .route("/api/stripe/create-credit-checkout", post(create_credit_checkout_handler))
+        .route("/api/stripe/customer-portal", post(customer_portal_handler))
         .route("/api/webhook/stripe", post(stripe_webhook_handler))
         .route("/api/save-result", post(save_result_handler))
         .route("/api/transcription", post(save_transcription_handler))
@@ -484,6 +487,16 @@ async fn admin_tool_list_staff_handler(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<db::UserInfo>>, (StatusCode, String)> {
     let users = db::list_users_by_org(&state.db, id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(users))
+}
+
+async fn admin_tool_list_individual_users_handler(
+    State(state): State<AppState>,
+    _: AuthSuperAdmin,
+) -> Result<Json<Vec<db::IndividualUserAdmin>>, (StatusCode, String)> {
+    let users = db::list_individual_users(&state.db)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(users))
@@ -744,6 +757,56 @@ async fn plan_status_handler(
         None
     };
 
+    // subscription_cancel_at が未設定の月額ユーザーはStripeに問い合わせて補完
+    let subscription_cancel_at = if org.plan == "monthly"
+        && org.subscription_cancel_at.is_none()
+        && !state.stripe_secret_key.is_empty()
+    {
+        if let Some(ref sub_id) = org.stripe_subscription_id {
+            let stripe_res = state
+                .http_client
+                .get(format!("https://api.stripe.com/v1/subscriptions/{}", sub_id))
+                .basic_auth(&state.stripe_secret_key, Some(""))
+                .send()
+                .await
+                .ok();
+            if let Some(res) = stripe_res {
+                if let Ok(sub) = res.json::<serde_json::Value>().await {
+                    // cancel_at_period_end または cancel_at で解約予約を検出
+                    let cancel_ts = if sub["cancel_at_period_end"].as_bool().unwrap_or(false) {
+                        sub["current_period_end"].as_i64()
+                    } else {
+                        sub["cancel_at"].as_i64()
+                    };
+                    if let Some(ts) = cancel_ts {
+                        let cancel_at = chrono::DateTime::from_timestamp(ts, 0);
+                        if let Some(dt) = cancel_at {
+                            sqlx::query(
+                                "UPDATE organizations SET subscription_cancel_at = $1 WHERE id = $2",
+                            )
+                            .bind(dt)
+                            .bind(org.id)
+                            .execute(&state.db)
+                            .await
+                            .ok();
+                        }
+                        cancel_at
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        org.subscription_cancel_at
+    };
+
     Ok(Json(PlanStatusResponse {
         plan: org.plan,
         is_expired,
@@ -752,6 +815,7 @@ async fn plan_status_handler(
         monthly_limit,
         is_limit_reached,
         credits,
+        subscription_cancel_at,
     }))
 }
 
@@ -1145,6 +1209,52 @@ async fn create_credit_checkout_handler(
     Ok(Json(CheckoutSessionResponse { url }))
 }
 
+async fn customer_portal_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<CheckoutSessionResponse>, (StatusCode, String)> {
+    let customer_id = db::get_stripe_customer_id(&state.db, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "Stripeカスタマーが見つかりません。先に月額プランを契約してください。".to_string()))?;
+
+    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let return_url = format!("{}/plan", frontend_url);
+
+    let encoded_body = serde_urlencoded::to_string(&[
+        ("customer", customer_id.as_str()),
+        ("return_url", return_url.as_str()),
+    ])
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let res = state
+        .http_client
+        .post("https://api.stripe.com/v1/billing_portal/sessions")
+        .basic_auth(&state.stripe_secret_key, Some(""))
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(encoded_body)
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !res.status().is_success() {
+        let err_body = res.text().await.unwrap_or_default();
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Stripe error: {}", err_body)));
+    }
+
+    let session: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let url = session["url"]
+        .as_str()
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "Stripe response に URL が含まれていません".to_string()))?
+        .to_string();
+
+    Ok(Json(CheckoutSessionResponse { url }))
+}
+
 async fn stripe_webhook_handler(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
@@ -1197,6 +1307,23 @@ async fn stripe_webhook_handler(
                         _ => {}
                     }
                 }
+            }
+        }
+        "customer.subscription.updated" => {
+            let subscription = &event["data"]["object"];
+            let customer_id = subscription["customer"].as_str().unwrap_or("");
+            if !customer_id.is_empty() {
+                // cancel_at_period_end または cancel_at で解約予約を検出
+                let cancel_ts = if subscription["cancel_at_period_end"].as_bool().unwrap_or(false) {
+                    subscription["current_period_end"].as_i64()
+                } else {
+                    subscription["cancel_at"].as_i64()
+                };
+                let cancel_at = cancel_ts.and_then(|ts| chrono::DateTime::from_timestamp(ts, 0));
+                db::set_subscription_cancel_at(&state.db, customer_id, cancel_at)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                tracing::info!("Customer {} の解約予約更新: {:?}", customer_id, cancel_at);
             }
         }
         "customer.subscription.deleted" => {

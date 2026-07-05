@@ -30,8 +30,19 @@ export default function PlanBanner() {
 
   useEffect(() => {
     fetchStatus()
+    function handleAuthChanged() {
+      if (!isAuthenticated()) {
+        setStatus(null)
+      } else {
+        fetchStatus()
+      }
+    }
     window.addEventListener('planStatusChanged', fetchStatus)
-    return () => window.removeEventListener('planStatusChanged', fetchStatus)
+    window.addEventListener('authChanged', handleAuthChanged)
+    return () => {
+      window.removeEventListener('planStatusChanged', fetchStatus)
+      window.removeEventListener('authChanged', handleAuthChanged)
+    }
   }, [])
 
   async function handleUpgrade() {

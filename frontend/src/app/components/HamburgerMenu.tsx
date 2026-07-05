@@ -27,7 +27,7 @@ export default function HamburgerMenu() {
     setOpen(false)
     if (!confirm('ログアウトしますか？')) return
     removeToken()
-    router.push('/start')
+    router.push(isIndividual ? '/individual/login' : '/start')
   }
 
   return (
@@ -67,7 +67,7 @@ export default function HamburgerMenu() {
               onClick={() => setOpen(false)}
               className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              料金プラン
+              プラン変更
             </Link>
           )}
           {(isAdmin || isIndividual) && (

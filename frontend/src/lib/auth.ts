@@ -5,10 +5,12 @@ export function getToken(): string | null {
 
 export function setToken(token: string): void {
   localStorage.setItem('token', token)
+  window.dispatchEvent(new Event('authChanged'))
 }
 
 export function removeToken(): void {
   localStorage.removeItem('token')
+  window.dispatchEvent(new Event('authChanged'))
 }
 
 export function isAuthenticated(): boolean {
