@@ -1034,7 +1034,7 @@ async fn create_checkout_session_handler(
     let success_url = format!("{}/?checkout=success", frontend_url);
     let cancel_url = frontend_url;
 
-    let params: &[(&str, &str)] = &[
+    let mut param_vec: Vec<(&str, &str)> = vec![
         ("mode", "subscription"),
         ("line_items[0][price]", price_id.as_str()),
         ("line_items[0][quantity]", "1"),
@@ -1042,8 +1042,12 @@ async fn create_checkout_session_handler(
         ("cancel_url", cancel_url.as_str()),
         ("metadata[org_id]", org_id_str.as_str()),
     ];
+    if auth.role == "individual" && !auth.name.is_empty() {
+        param_vec.push(("customer_email", auth.name.as_str()));
+    }
+    let params = param_vec;
 
-    let encoded_body = serde_urlencoded::to_string(params)
+    let encoded_body = serde_urlencoded::to_string(&params)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let response = state
@@ -1096,7 +1100,7 @@ async fn create_credit_checkout_handler(
     let success_url = format!("{}/?checkout=credit", frontend_url);
     let cancel_url = frontend_url;
 
-    let params: &[(&str, &str)] = &[
+    let mut param_vec: Vec<(&str, &str)> = vec![
         ("mode", "payment"),
         ("line_items[0][price]", credit_price_id.as_str()),
         ("line_items[0][quantity]", "1"),
@@ -1105,8 +1109,12 @@ async fn create_credit_checkout_handler(
         ("metadata[org_id]", org_id_str.as_str()),
         ("metadata[credits]", "1"),
     ];
+    if auth.role == "individual" && !auth.name.is_empty() {
+        param_vec.push(("customer_email", auth.name.as_str()));
+    }
+    let params = param_vec;
 
-    let encoded_body = serde_urlencoded::to_string(params)
+    let encoded_body = serde_urlencoded::to_string(&params)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let response = state
