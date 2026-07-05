@@ -52,14 +52,16 @@ export default function HomePage() {
         const timers = [2000, 5000, 10000].map((ms) =>
           setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
         )
-        return () => timers.forEach(clearTimeout)
+        const hideTimer = setTimeout(() => setPaymentSuccess(null), 8000)
+        return () => { timers.forEach(clearTimeout); clearTimeout(hideTimer) }
       } else if (params.get('checkout') === 'credit') {
         setPaymentSuccess('credit')
         window.history.replaceState({}, '', '/')
         const timers = [2000, 5000].map((ms) =>
           setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
         )
-        return () => timers.forEach(clearTimeout)
+        const hideTimer = setTimeout(() => setPaymentSuccess(null), 8000)
+        return () => { timers.forEach(clearTimeout); clearTimeout(hideTimer) }
       }
     }
   }, [])
