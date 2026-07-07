@@ -265,10 +265,7 @@ export default function FormatForm() {
           {isRecording && (
             <span className="text-xs text-red-500 font-medium animate-pulse">録音中...</span>
           )}
-          {isRecording && typeof navigator !== 'undefined' && (
-            (navigator as any).standalone === true ||
-            (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches)
-          ) && (
+          {isRecording && (
             <span className="text-xs text-orange-500 font-medium">⚠ 画面をオンのままにしてください</span>
           )}
           {isTranscribing && (
