@@ -31,6 +31,8 @@ export default function IndividualLoginPage() {
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
       setToken(data.token)
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+      window.scrollTo(0, 0)
       router.push(data.is_first_login ? '/individual/plan-select' : '/')
     } catch (e) {
       const msg = e instanceof Error ? e.message : ''
