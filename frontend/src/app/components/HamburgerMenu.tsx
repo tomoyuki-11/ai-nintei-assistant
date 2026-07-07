@@ -34,12 +34,31 @@ export default function HamburgerMenu() {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex flex-col justify-center items-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors gap-1.5"
+        className="flex flex-col justify-center items-center w-10 h-10 rounded-lg hover:bg-gray-100 active:bg-gray-100 transition-colors gap-1.5"
         aria-label="メニュー"
       >
-        <span className="block w-5 h-0.5 bg-gray-700 rounded-full" />
-        <span className="block w-5 h-0.5 bg-gray-700 rounded-full" />
-        <span className="block w-5 h-0.5 bg-gray-700 rounded-full" />
+        <span
+          className="block w-5 h-0.5 bg-gray-700 rounded-full"
+          style={{
+            transition: 'transform 0.3s ease',
+            transform: open ? 'translateY(8px) rotate(45deg)' : 'none',
+          }}
+        />
+        <span
+          className="block w-5 h-0.5 bg-gray-700 rounded-full"
+          style={{
+            transition: 'opacity 0.2s ease, transform 0.3s ease',
+            opacity: open ? 0 : 1,
+            transform: open ? 'scaleX(0)' : 'none',
+          }}
+        />
+        <span
+          className="block w-5 h-0.5 bg-gray-700 rounded-full"
+          style={{
+            transition: 'transform 0.3s ease',
+            transform: open ? 'translateY(-8px) rotate(-45deg)' : 'none',
+          }}
+        />
       </button>
 
       {open && (
