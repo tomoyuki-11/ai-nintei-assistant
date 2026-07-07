@@ -55,6 +55,10 @@ export default function FormatForm() {
   }
 
   useEffect(() => {
+    return () => { clearRecording() }
+  }, [clearRecording])
+
+  useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/settings`, { headers: authHeaders() })
       .then((res) => res.ok ? res.json() : null)
