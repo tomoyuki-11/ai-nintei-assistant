@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useRef, useState, useCallback } from 'react'
+import { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react'
 import { authHeaders } from '@/lib/auth'
 
 type RecordingContextType = {
@@ -159,6 +159,20 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, [])
+
+  // ページが再表示されたとき（スリープ復帰など）にWake Lockを再取得
+  useEffect(() => {
+    if (!isRecording) return
+    const handleVisibilityChange = async () => {
+      if (!document.hidden && 'wakeLock' in navigator) {
+        try {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
+        } catch {}
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [isRecording])
 
   const stopRecording = useCallback(async (): Promise<string> => {
     const mediaRecorder = mediaRecorderRef.current
