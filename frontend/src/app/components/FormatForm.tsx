@@ -189,33 +189,60 @@ export default function FormatForm() {
     <div className="space-y-6">
       {/* iOS録音中フルスクリーンオーバーレイ（節電・OLED最適化） */}
       {isRecording && isIOS && (
-        <div className="fixed inset-0 z-200 bg-black flex flex-col items-center justify-center gap-10 select-none">
-          <div className="flex flex-col items-center gap-5">
-            <span className={`w-5 h-5 rounded-full bg-red-500 ${isPaused ? 'opacity-40' : 'animate-pulse'}`} />
-            <span className="text-white text-6xl font-mono font-light tracking-widest">
-              {formatTime(recordingSeconds)}
-            </span>
-            <span className="text-red-400 text-sm font-medium tracking-wide">
-              {isPaused ? '一時停止中' : '録音中'}
-            </span>
+        <div className="fixed inset-0 z-200 bg-black flex flex-col items-center justify-center select-none">
+          {/* タイマー */}
+          <p className="text-white text-5xl font-mono font-thin tracking-[0.15em] mb-14">
+            {formatTime(recordingSeconds)}
+          </p>
+
+          {/* 録音インジケーター（リング付き） */}
+          <div className="relative flex items-center justify-center mb-14">
+            {!isPaused && (
+              <>
+                <span className="absolute w-44 h-44 rounded-full border border-red-500/20 animate-ping" style={{ animationDuration: '2.4s' }} />
+                <span className="absolute w-36 h-36 rounded-full border border-red-500/30 animate-ping" style={{ animationDuration: '2.4s', animationDelay: '0.5s' }} />
+              </>
+            )}
+            <div className={`w-28 h-28 rounded-full flex items-center justify-center transition-colors duration-300 ${isPaused ? 'bg-gray-700' : 'bg-red-600'}`}>
+              <div className="w-11 h-11 rounded-full bg-white/90" />
+            </div>
           </div>
-          {showScreenWarning && !isPaused && (
-            <span className="text-gray-500 text-xs">⚠ 画面をオンのままにしてください</span>
-          )}
-          <div className="flex gap-6">
-            <button
-              onClick={isPaused ? resumeRecording : pauseRecording}
-              className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center text-white text-2xl active:bg-gray-600"
-            >
-              {isPaused ? '▶' : '⏸'}
-            </button>
+
+          {/* ステータス */}
+          <p className="text-gray-500 text-xs tracking-[0.3em] uppercase mb-14">
+            {isPaused ? '一時停止中' : '録音中'}
+          </p>
+
+          {/* ボタン */}
+          <div className="flex gap-10 items-center">
             <button
               onClick={handleStopRecording}
-              className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center active:bg-red-700"
+              className="w-14 h-14 rounded-full bg-gray-800 flex items-center justify-center active:bg-gray-700 transition-colors"
             >
-              <span className="inline-block w-5 h-5 rounded-sm bg-white" />
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect width="16" height="16" rx="2" fill="white" />
+              </svg>
+            </button>
+            <button
+              onClick={isPaused ? resumeRecording : pauseRecording}
+              className="w-14 h-14 rounded-full bg-gray-800 flex items-center justify-center active:bg-gray-700 transition-colors"
+            >
+              {isPaused ? (
+                <svg width="16" height="18" viewBox="0 0 16 18" fill="none">
+                  <path d="M1 1L15 9L1 17V1Z" fill="white" />
+                </svg>
+              ) : (
+                <svg width="14" height="18" viewBox="0 0 14 18" fill="none">
+                  <rect x="0" y="0" width="5" height="18" rx="1.5" fill="white" />
+                  <rect x="9" y="0" width="5" height="18" rx="1.5" fill="white" />
+                </svg>
+              )}
             </button>
           </div>
+
+          {showScreenWarning && !isPaused && (
+            <p className="text-gray-700 text-xs mt-12">⚠ 画面をオンのままにしてください</p>
+          )}
         </div>
       )}
 
