@@ -195,17 +195,9 @@ export default function FormatForm() {
             {formatTime(recordingSeconds)}
           </p>
 
-          {/* 録音インジケーター（リング付き） */}
-          <div className="relative flex items-center justify-center mb-14">
-            {!isPaused && (
-              <>
-                <span className="absolute w-44 h-44 rounded-full border border-red-500/20 animate-ping" style={{ animationDuration: '2.4s' }} />
-                <span className="absolute w-36 h-36 rounded-full border border-red-500/30 animate-ping" style={{ animationDuration: '2.4s', animationDelay: '0.5s' }} />
-              </>
-            )}
-            <div className={`w-28 h-28 rounded-full flex items-center justify-center transition-colors duration-300 ${isPaused ? 'bg-gray-700' : 'bg-red-600'}`}>
-              <div className="w-11 h-11 rounded-full bg-white/90" />
-            </div>
+          {/* 録音インジケーター */}
+          <div className="flex items-center justify-center mb-14">
+            <div className={`w-5 h-5 rounded-full transition-colors duration-300 ${isPaused ? 'bg-gray-600' : 'bg-red-500 animate-pulse'}`} />
           </div>
 
           {/* ステータス */}
