@@ -181,7 +181,7 @@ export default function FormatForm() {
   return (
     <div className="space-y-6">
       {/* iOS録音中フルスクリーンオーバーレイ（節電・OLED最適化） */}
-      {isRecording && isIOS && (
+      {false && isRecording && isIOS && (
         <div className="fixed inset-0 z-200 bg-black flex flex-col items-center justify-center gap-10 select-none">
           <div className="flex flex-col items-center gap-5">
             <span className="w-5 h-5 rounded-full bg-red-500 animate-pulse" />
