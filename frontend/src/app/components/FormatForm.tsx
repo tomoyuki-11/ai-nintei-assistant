@@ -51,8 +51,10 @@ export default function FormatForm() {
   }, [isRecording, isPaused])
 
   function formatTime(s: number) {
-    const m = Math.floor(s / 60)
-    return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const sec = s % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
   }
 
   useEffect(() => {
@@ -200,19 +202,18 @@ export default function FormatForm() {
           {showScreenWarning && !isPaused && (
             <span className="text-gray-500 text-xs">⚠ 画面をオンのままにしてください</span>
           )}
-          <div className="flex gap-4">
+          <div className="flex gap-6">
             <button
               onClick={isPaused ? resumeRecording : pauseRecording}
-              className="flex items-center gap-2 rounded-full bg-gray-700 px-7 py-4 text-white font-medium text-base active:bg-gray-600"
+              className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center text-white text-2xl active:bg-gray-600"
             >
-              {isPaused ? '▶ 再開' : '⏸ 一時停止'}
+              {isPaused ? '▶' : '⏸'}
             </button>
             <button
               onClick={handleStopRecording}
-              className="flex items-center gap-2 rounded-full bg-red-600 px-7 py-4 text-white font-medium text-base active:bg-red-700"
+              className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center active:bg-red-700"
             >
-              <span className="inline-block w-4 h-4 rounded-sm bg-white" />
-              停止
+              <span className="inline-block w-5 h-5 rounded-sm bg-white" />
             </button>
           </div>
         </div>
