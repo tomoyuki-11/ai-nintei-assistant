@@ -26,9 +26,9 @@ export default function StartPage() {
 
         <Link
           href="/licence"
-          className="flex items-center w-full rounded-xl border-2 border-blue-200 bg-white px-5 py-4 shadow-sm hover:border-blue-400 hover:bg-blue-50 transition-colors group gap-4"
+          className="flex items-center w-full rounded-xl border-2 border-blue-200 bg-white px-5 py-4 shadow-sm hover:border-blue-400 hover:bg-blue-50 active:border-blue-400 active:bg-blue-50 transition-colors group gap-4"
         >
-          <div className="shrink-0 w-12 h-12 rounded-xl bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+          <div className="shrink-0 w-12 h-12 rounded-xl bg-blue-100 group-hover:bg-blue-200 group-active:bg-blue-200 flex items-center justify-center transition-colors">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <rect x="3" y="8" width="18" height="13" rx="1.5" fill="#3B82F6" opacity="0.2"/>
               <rect x="3" y="8" width="18" height="13" rx="1.5" stroke="#2563EB" strokeWidth="1.5"/>
@@ -40,19 +40,19 @@ export default function StartPage() {
             </svg>
           </div>
           <div className="text-left">
-            <p className="text-base font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">施設での使用</p>
+            <p className="text-base font-semibold text-gray-900 group-hover:text-blue-700 group-active:text-blue-700 transition-colors">施設での使用</p>
             <p className="text-xs text-gray-400 mt-0.5">ライセンスキーでログイン</p>
           </div>
-          <svg className="ml-auto shrink-0 text-gray-300 group-hover:text-blue-400 transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <svg className="ml-auto shrink-0 text-gray-300 group-hover:text-blue-400 group-active:text-blue-400 transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none">
             <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </Link>
 
         <Link
           href="/individual/login"
-          className="flex items-center w-full rounded-xl border-2 border-gray-200 bg-white px-5 py-4 shadow-sm hover:border-green-400 hover:bg-green-50 transition-colors group gap-4"
+          className="flex items-center w-full rounded-xl border-2 border-gray-200 bg-white px-5 py-4 shadow-sm hover:border-green-400 hover:bg-green-50 active:border-green-400 active:bg-green-50 transition-colors group gap-4"
         >
-          <div className="shrink-0 w-12 h-12 rounded-xl bg-gray-100 group-hover:bg-green-100 flex items-center justify-center transition-colors">
+          <div className="shrink-0 w-12 h-12 rounded-xl bg-gray-100 group-hover:bg-green-100 group-active:bg-green-100 flex items-center justify-center transition-colors">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="12" cy="8" r="3.5" fill="#22C55E" opacity="0.25" stroke="#16A34A" strokeWidth="1.5"/>
               <path d="M5 20c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke="#16A34A" strokeWidth="1.5" strokeLinecap="round"/>
@@ -60,10 +60,10 @@ export default function StartPage() {
             </svg>
           </div>
           <div className="text-left">
-            <p className="text-base font-semibold text-gray-900 group-hover:text-green-700 transition-colors">個人での使用</p>
+            <p className="text-base font-semibold text-gray-900 group-hover:text-green-700 group-active:text-green-700 transition-colors">個人での使用</p>
             <p className="text-xs text-gray-400 mt-0.5">メールアドレスでログイン</p>
           </div>
-          <svg className="ml-auto shrink-0 text-gray-300 group-hover:text-green-400 transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <svg className="ml-auto shrink-0 text-gray-300 group-hover:text-green-400 group-active:text-green-400 transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none">
             <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </Link>
