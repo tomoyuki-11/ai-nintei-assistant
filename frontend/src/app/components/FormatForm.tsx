@@ -303,7 +303,7 @@ export default function FormatForm() {
           {isRecording && (
             <span className="text-xs text-red-500 font-medium animate-pulse">録音中...</span>
           )}
-          {isRecording && (
+          {isRecording && isIOS && (
             <span className="text-xs text-orange-500 font-medium">⚠ 画面をオンのままにしてください</span>
           )}
           {isTranscribing && (
