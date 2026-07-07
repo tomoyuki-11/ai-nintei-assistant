@@ -39,6 +39,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
   const textRef = useRef('')
   textRef.current = text
 
@@ -117,14 +118,35 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         if (e.data.size > 0) chunksRef.current.push(e.data)
       }
 
-      // スリープ防止（iOS 16.4以降 / Android Chrome対応）
+      // スリープ防止①: Wake Lock API（iOS 16.4以降 / Android Chrome対応）
       if ('wakeLock' in navigator) {
         try {
           wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
-        } catch {
-          // 非対応環境では無視して続行
-        }
+        } catch { /* 非対応環境では無視 */ }
       }
+
+      // スリープ防止②: AudioContextで無音を流しiOSオーディオセッションを維持
+      // → スクリーンロック中もマイク入力が継続される可能性がある
+      try {
+        const AudioCtxClass = (window.AudioContext || (window as any).webkitAudioContext) as any
+        if (AudioCtxClass) {
+          const audioCtx: AudioContext = new AudioCtxClass()
+          // マイクをAudioContextに接続してオーディオセッションを確立
+          const micSource = audioCtx.createMediaStreamSource(stream)
+          const silentGain = audioCtx.createGain()
+          silentGain.gain.value = 0
+          micSource.connect(silentGain)
+          silentGain.connect(audioCtx.destination)
+          // 無音バッファをループ再生してセッションを維持
+          const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate)
+          const silentSource = audioCtx.createBufferSource()
+          silentSource.buffer = buffer
+          silentSource.loop = true
+          silentSource.connect(audioCtx.destination)
+          silentSource.start()
+          audioCtxRef.current = audioCtx
+        }
+      } catch { /* 非対応環境では無視 */ }
 
       mediaRecorder.start(1000)
       setIsRecording(true)
@@ -152,6 +174,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         streamRef.current?.getTracks().forEach((t) => t.stop())
         wakeLockRef.current?.release().catch(() => {})
         wakeLockRef.current = null
+        audioCtxRef.current?.close().catch(() => {})
+        audioCtxRef.current = null
         setIsRecording(false)
 
         const mimeType = chunksRef.current[0]?.type || 'audio/webm'
