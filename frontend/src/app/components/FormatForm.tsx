@@ -18,7 +18,7 @@ type ConfirmState =
 
 export default function FormatForm() {
   const router = useRouter()
-  const { isRecording, isTranscribing, text, setText, recordingError, setRecordingError, pendingAudio, startRecording, stopRecording, transcribeFile, retryTranscription, clearPendingAudio, clearRecording } = useRecording()
+  const { isRecording, isPaused, isTranscribing, text, setText, recordingError, setRecordingError, pendingAudio, startRecording, stopRecording, pauseRecording, resumeRecording, transcribeFile, retryTranscription, clearPendingAudio, clearRecording } = useRecording()
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -45,9 +45,10 @@ export default function FormatForm() {
 
   useEffect(() => {
     if (!isRecording) { setRecordingSeconds(0); return }
+    if (isPaused) return
     const id = setInterval(() => setRecordingSeconds((s) => s + 1), 1000)
     return () => clearInterval(id)
-  }, [isRecording])
+  }, [isRecording, isPaused])
 
   function formatTime(s: number) {
     const m = Math.floor(s / 60)
@@ -188,22 +189,32 @@ export default function FormatForm() {
       {isRecording && isIOS && (
         <div className="fixed inset-0 z-200 bg-black flex flex-col items-center justify-center gap-10 select-none">
           <div className="flex flex-col items-center gap-5">
-            <span className="w-5 h-5 rounded-full bg-red-500 animate-pulse" />
+            <span className={`w-5 h-5 rounded-full bg-red-500 ${isPaused ? 'opacity-40' : 'animate-pulse'}`} />
             <span className="text-white text-6xl font-mono font-light tracking-widest">
               {formatTime(recordingSeconds)}
             </span>
-            <span className="text-red-400 text-sm font-medium tracking-wide">録音中</span>
+            <span className="text-red-400 text-sm font-medium tracking-wide">
+              {isPaused ? '一時停止中' : '録音中'}
+            </span>
           </div>
-          {showScreenWarning && (
+          {showScreenWarning && !isPaused && (
             <span className="text-gray-500 text-xs">⚠ 画面をオンのままにしてください</span>
           )}
-          <button
-            onClick={handleStopRecording}
-            className="flex items-center gap-2 rounded-full bg-red-600 px-10 py-4 text-white font-medium text-base active:bg-red-700"
-          >
-            <span className="inline-block w-4 h-4 rounded-sm bg-white" />
-            録音停止
-          </button>
+          <div className="flex gap-4">
+            <button
+              onClick={isPaused ? resumeRecording : pauseRecording}
+              className="flex items-center gap-2 rounded-full bg-gray-700 px-7 py-4 text-white font-medium text-base active:bg-gray-600"
+            >
+              {isPaused ? '▶ 再開' : '⏸ 一時停止'}
+            </button>
+            <button
+              onClick={handleStopRecording}
+              className="flex items-center gap-2 rounded-full bg-red-600 px-7 py-4 text-white font-medium text-base active:bg-red-700"
+            >
+              <span className="inline-block w-4 h-4 rounded-sm bg-white" />
+              停止
+            </button>
+          </div>
         </div>
       )}
 

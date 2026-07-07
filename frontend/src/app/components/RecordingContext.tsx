@@ -5,6 +5,7 @@ import { authHeaders } from '@/lib/auth'
 
 type RecordingContextType = {
   isRecording: boolean
+  isPaused: boolean
   isTranscribing: boolean
   text: string
   setText: (text: string) => void
@@ -13,6 +14,8 @@ type RecordingContextType = {
   pendingAudio: Blob | null
   startRecording: () => void
   stopRecording: () => Promise<string>
+  pauseRecording: () => void
+  resumeRecording: () => void
   transcribeFile: (file: File | Blob) => Promise<string>
   retryTranscription: () => Promise<string>
   clearPendingAudio: () => void
@@ -31,6 +34,7 @@ function getExtFromMime(mimeType: string): string {
 
 export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const [isRecording, setIsRecording] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [text, setText] = useState('')
   const [recordingError, setRecordingError] = useState('')
@@ -119,6 +123,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
       mediaRecorder.start(1000)
       setIsRecording(true)
+      setIsPaused(false)
       setRecordingError('')
     } catch (e: any) {
       if (e.name === 'NotAllowedError') {
@@ -129,6 +134,24 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         setRecordingError(`録音エラーが発生しました（${e.name}）`)
       }
     }
+  }, [])
+
+  const pauseRecording = useCallback(() => {
+    try {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.pause()
+        setIsPaused(true)
+      }
+    } catch { /* 非対応環境では無視 */ }
+  }, [])
+
+  const resumeRecording = useCallback(() => {
+    try {
+      if (mediaRecorderRef.current?.state === 'paused') {
+        mediaRecorderRef.current.resume()
+        setIsPaused(false)
+      }
+    } catch { /* 非対応環境では無視 */ }
   }, [])
 
   const stopRecording = useCallback(async (): Promise<string> => {
@@ -142,6 +165,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       mediaRecorder.onstop = async () => {
         streamRef.current?.getTracks().forEach((t) => t.stop())
         setIsRecording(false)
+        setIsPaused(false)
 
         const mimeType = chunksRef.current[0]?.type || 'audio/webm'
         const blob = new Blob(chunksRef.current, { type: mimeType })
@@ -210,6 +234,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   return (
     <RecordingContext.Provider value={{
       isRecording,
+      isPaused,
       isTranscribing,
       text,
       setText,
@@ -218,6 +243,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       pendingAudio,
       startRecording,
       stopRecording,
+      pauseRecording,
+      resumeRecording,
       transcribeFile,
       retryTranscription,
       clearPendingAudio,
