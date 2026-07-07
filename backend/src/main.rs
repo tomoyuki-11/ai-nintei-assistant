@@ -8,6 +8,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
+use axum::http::HeaderValue;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
@@ -254,10 +255,16 @@ async fn main() {
         openai_api_key,
     };
 
+    let frontend_url = std::env::var("FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE])
         .allow_headers(Any)
-        .allow_origin(Any);
+        .allow_origin(
+            frontend_url
+                .parse::<HeaderValue>()
+                .unwrap_or_else(|_| HeaderValue::from_static("http://localhost:3000")),
+        );
 
     let app = Router::new()
         .route("/health", get(health_handler))

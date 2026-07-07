@@ -1,44 +1,57 @@
 services:
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=${API_URL}
-    restart: unless-stopped
-    depends_on:
-      - backend
-
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: rust:1.96-slim
+    working_dir: /app
+    command: cargo run --release
     ports:
       - "8080:8080"
+    volumes:
+      - ./backend:/app
+      - cargo_registry:/usr/local/cargo/registry
+      - target_cache:/app/target
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - RUST_LOG=info
-    restart: unless-stopped
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - SUPERADMIN_PASSWORD=${SUPERADMIN_PASSWORD}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRICE_ID=${STRIPE_PRICE_ID}
+      - STRIPE_CREDIT_PRICE_ID=${STRIPE_CREDIT_PRICE_ID}
+      - STRIPE_INDIVIDUAL_PRICE_ID=${STRIPE_INDIVIDUAL_PRICE_ID}
+      - STRIPE_INDIVIDUAL_CREDIT_PRICE_ID=${STRIPE_INDIVIDUAL_CREDIT_PRICE_ID}
+      - FRONTEND_URL=${FRONTEND_URL}
     depends_on:
       db:
         condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080' 2>/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 90
+      start_period: 60s
 
   db:
     image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
+    restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
   postgres_data:
+  cargo_registry:
+  target_cache:
