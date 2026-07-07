@@ -39,10 +39,8 @@ export default function FormatForm() {
     const ios = /iPhone|iPad|iPod/.test(ua)
     setIsIOS(ios)
     // 警告はSafari（Chrome等を除く）またはPWAのみ
-    const isIOSSafari = ios && !/(CriOS|Chrome|FxiOS|OPiOS)/.test(ua)
-    const isPWA = (navigator as any).standalone === true ||
-      window.matchMedia('(display-mode: standalone)').matches
-    setShowScreenWarning(isIOSSafari || isPWA)
+    // iOSは全ブラウザ（Safari・Chrome等）でスリープ時に音声セッションが中断されるため警告表示
+    setShowScreenWarning(ios)
   }, [])
 
   useEffect(() => {
