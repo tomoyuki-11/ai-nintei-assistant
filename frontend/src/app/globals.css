@@ -30,3 +30,15 @@ body {
 input, select, textarea {
   font-size: 16px;
 }
+
+/* スプラッシュ画面アニメーション */
+@keyframes splash-ring {
+  from { stroke-dashoffset: 277; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes splash-logo {
+  0%   { opacity: 0; transform: scale(0.72); }
+  65%  { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}

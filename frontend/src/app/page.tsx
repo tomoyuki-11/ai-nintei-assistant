@@ -42,6 +42,7 @@ export default function HomePage() {
   const [paymentSuccess, setPaymentSuccess] = useState<'subscription' | 'credit' | null>(null)
   const [formatConfirmItem, setFormatConfirmItem] = useState<Transcription | null>(null)
   const [limitError, setLimitError] = useState('')
+  const [splash, setSplash] = useState<'visible' | 'fading' | 'hidden'>('visible')
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -71,7 +72,7 @@ export default function HomePage() {
       router.push('/start')
       return
     }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history`, {
+    const fetchPromise = fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history`, {
       headers: authHeaders(),
     })
       .then((res) => {
@@ -81,6 +82,12 @@ export default function HomePage() {
       .then((data) => setHistory(data))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
+
+    const minDelay = new Promise<void>((resolve) => setTimeout(resolve, 900))
+    Promise.all([fetchPromise, minDelay]).then(() => {
+      setSplash('fading')
+      setTimeout(() => setSplash('hidden'), 350)
+    })
   }, [router])
 
   function startEditing(item: Transcription) {
@@ -202,6 +209,43 @@ export default function HomePage() {
 
   return (
     <>
+    {/* スプラッシュ画面 */}
+    {splash !== 'hidden' && (
+      <div
+        className="fixed inset-0 z-50 bg-gray-50 flex flex-col items-center justify-center"
+        style={{
+          opacity: splash === 'fading' ? 0 : 1,
+          transition: 'opacity 0.35s ease-out',
+          pointerEvents: splash === 'fading' ? 'none' : 'auto',
+        }}
+      >
+        <div className="relative w-32 h-32">
+          <svg
+            className="absolute inset-0 w-full h-full"
+            style={{ transform: 'rotate(-90deg)' }}
+            viewBox="0 0 100 100"
+          >
+            <circle cx="50" cy="50" r="44" fill="none" stroke="#E5E7EB" strokeWidth="4" />
+            <circle
+              cx="50" cy="50" r="44"
+              fill="none"
+              stroke="#3B82F6"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray="277"
+              style={{ animation: 'splash-ring 0.85s cubic-bezier(0.4,0,0.2,1) forwards' }}
+            />
+          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/logo-transparent_1.png"
+            alt=""
+            className="absolute inset-0 w-full h-full object-contain p-4"
+            style={{ animation: 'splash-logo 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards' }}
+          />
+        </div>
+      </div>
+    )}
     {/* AI整形確認モーダル */}
     {formatConfirmItem && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
