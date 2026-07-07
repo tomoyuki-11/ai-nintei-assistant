@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL
 
@@ -65,6 +66,12 @@ export default function LicencePage() {
               {loading ? '認証中...' : 'ライセンス認証'}
             </button>
           </form>
+        </div>
+
+        <div className="mt-4 text-center">
+          <Link href="/start" className="text-sm text-gray-400 hover:text-gray-600 hover:underline">
+            ← 選択画面に戻る
+          </Link>
         </div>
       </div>
     </main>
