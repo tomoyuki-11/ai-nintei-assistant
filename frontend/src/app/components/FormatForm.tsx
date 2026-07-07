@@ -30,11 +30,19 @@ export default function FormatForm() {
   const [showFormatConfirm, setShowFormatConfirm] = useState(false)
   const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null)
   const [isIOS, setIsIOS] = useState(false)
+  const [showScreenWarning, setShowScreenWarning] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setIsIOS(/iPhone|iPad|iPod/.test(navigator.userAgent))
+    const ua = navigator.userAgent
+    const ios = /iPhone|iPad|iPod/.test(ua)
+    setIsIOS(ios)
+    // 警告はSafari（Chrome等を除く）またはPWAのみ
+    const isIOSSafari = ios && !/(CriOS|Chrome|FxiOS|OPiOS)/.test(ua)
+    const isPWA = (navigator as any).standalone === true ||
+      window.matchMedia('(display-mode: standalone)').matches
+    setShowScreenWarning(isIOSSafari || isPWA)
   }, [])
 
   useEffect(() => {
@@ -176,7 +184,7 @@ export default function FormatForm() {
     <div className="space-y-6">
       {/* iOS録音中フルスクリーンオーバーレイ（節電・OLED最適化） */}
       {isRecording && isIOS && (
-        <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center gap-10 select-none">
+        <div className="fixed inset-0 z-200 bg-black flex flex-col items-center justify-center gap-10 select-none">
           <div className="flex flex-col items-center gap-5">
             <span className="w-5 h-5 rounded-full bg-red-500 animate-pulse" />
             <span className="text-white text-6xl font-mono font-light tracking-widest">
@@ -184,7 +192,9 @@ export default function FormatForm() {
             </span>
             <span className="text-red-400 text-sm font-medium tracking-wide">録音中</span>
           </div>
-          <span className="text-gray-500 text-xs">⚠ 画面をオンのままにしてください</span>
+          {showScreenWarning && (
+            <span className="text-gray-500 text-xs">⚠ 画面をオンのままにしてください</span>
+          )}
           <button
             onClick={handleStopRecording}
             className="flex items-center gap-2 rounded-full bg-red-600 px-10 py-4 text-white font-medium text-base active:bg-red-700"
@@ -303,7 +313,7 @@ export default function FormatForm() {
           {isRecording && (
             <span className="text-xs text-red-500 font-medium animate-pulse">録音中...</span>
           )}
-          {isRecording && isIOS && (
+          {isRecording && showScreenWarning && (
             <span className="text-xs text-orange-500 font-medium">⚠ 画面をオンのままにしてください</span>
           )}
           {isTranscribing && (
