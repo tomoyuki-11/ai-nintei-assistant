@@ -291,14 +291,14 @@ export default function HomePage() {
                 className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
               >
                 {/* ヘッダー */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+                <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50 gap-2">
                   <div className="flex items-center gap-3 min-w-0">
                     <p className="text-xs text-gray-400 shrink-0">{formatDate(item.created_at)}</p>
                     {item.user_name && (
                       <p className="text-xs text-gray-500 truncate">担当：{item.user_name}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {isEditing ? (
                       isDeleting ? (
                         <>
