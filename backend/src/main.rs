@@ -845,8 +845,8 @@ async fn update_settings_handler(
     auth: AuthUser,
     Json(body): Json<UpdateSettingsRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    if auth.role != "admin" {
-        return Err((StatusCode::FORBIDDEN, "管理者権限が必要です".to_string()));
+    if auth.role != "admin" && auth.role != "individual" {
+        return Err((StatusCode::FORBIDDEN, "権限が必要です".to_string()));
     }
     let valid_modes = ["auto", "confirm"];
     if !valid_modes.contains(&body.transcription_save_mode.as_str())
