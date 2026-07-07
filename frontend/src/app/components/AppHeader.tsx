@@ -6,7 +6,7 @@ import HamburgerMenu from './HamburgerMenu'
 import PlanBanner from './PlanBanner'
 import { useRecording } from './RecordingContext'
 
-const EXCLUDED = ['/login', '/licence', '/signup', '/adminTool', '/individual/plan-select']
+const EXCLUDED = ['/login', '/licence', '/signup', '/adminTool', '/individual/plan-select', '/start', '/individual/login', '/individual/register']
 
 export default function AppHeader() {
   const pathname = usePathname()
