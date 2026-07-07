@@ -59,7 +59,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return HALLUCINATIONS.some((h) => t.includes(h))
   }
 
-  // Whisper API呼び出し（成功時は文字起こしテキスト、失敗時は null）
+  // Whisper API呼び出し
+  // 戻り値: 文字起こしテキスト（成功）/ null（API/ネットワークエラー）/ ''（無音・ハルシネーション）
   const callWhisper = useCallback(async (blob: Blob, filename?: string): Promise<string | null> => {
     setIsTranscribing(true)
     try {
@@ -80,9 +81,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
       const data = await res.json()
       const transcribed = data.text || ''
-      if (isHallucination(transcribed)) {
-        setRecordingError('録音中にスリープが発生した可能性があります。録音中は画面をオンのままにしてください。')
-        return null
+      if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
+        return ''
       }
       return transcribed
     } catch {
@@ -183,8 +183,13 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
         const transcribed = await callWhisper(blob)
         if (transcribed === null) {
+          // API/ネットワークエラー → 録音音声を保存してリトライ可能にする
           setPendingAudio(blob)
           setRecordingError('文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。')
+          resolve(textRef.current)
+        } else if (transcribed === '') {
+          // 無音またはスリープによる録音不全
+          setRecordingError('音声が検出されませんでした。スリープ中は録音が途切れることがあります。画面をオンのままにしてください。')
           resolve(textRef.current)
         } else {
           setPendingAudio(null)
@@ -204,6 +209,10 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
       return textRef.current
     }
+    if (transcribed === '') {
+      setRecordingError('音声が検出されませんでした。音声が含まれているファイルをご確認ください。')
+      return textRef.current
+    }
     return appendTranscription(transcribed)
   }, [callWhisper, appendTranscription])
 
@@ -213,6 +222,10 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     const transcribed = await callWhisper(pendingAudio)
     if (transcribed === null) {
       setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
+      return textRef.current
+    }
+    if (transcribed === '') {
+      setRecordingError('音声が検出されませんでした。録音音声に音声データが含まれていない可能性があります。')
       return textRef.current
     }
     setPendingAudio(null)
