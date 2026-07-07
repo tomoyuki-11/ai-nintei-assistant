@@ -33,7 +33,12 @@ export default function IndividualRegisterPage() {
       setToken(data.token)
       router.push(data.is_first_login ? '/individual/plan-select' : '/')
     } catch (e) {
-      setError(e instanceof Error ? e.message : '登録に失敗しました')
+      const msg = e instanceof Error ? e.message : ''
+      setError(
+        msg === 'Failed to fetch' || msg === 'Load failed' || msg === ''
+          ? 'サーバーに接続できませんでした。しばらくしてからお試しください。'
+          : msg
+      )
     } finally {
       setLoading(false)
     }
