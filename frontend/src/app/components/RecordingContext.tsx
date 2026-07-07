@@ -39,8 +39,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const silentAudioRef = useRef<HTMLAudioElement | null>(null)
   const textRef = useRef('')
   textRef.current = text
 
@@ -126,22 +124,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         } catch { /* 非対応環境では無視 */ }
       }
 
-      // スリープ防止②: AudioContextのサイレントバッファでオーディオセッションを維持
-      // ※ マイクストリームはAudioContextに通さない（MediaRecorderと競合して録音欠落の原因になる）
-      try {
-        const AudioCtxClass = (window.AudioContext || (window as any).webkitAudioContext) as any
-        if (AudioCtxClass) {
-          const audioCtx: AudioContext = new AudioCtxClass()
-          const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate)
-          const silentSource = audioCtx.createBufferSource()
-          silentSource.buffer = buffer
-          silentSource.loop = true
-          silentSource.connect(audioCtx.destination)
-          silentSource.start()
-          audioCtxRef.current = audioCtx
-        }
-      } catch { /* 非対応環境では無視 */ }
-
       mediaRecorder.start(1000)
       setIsRecording(true)
       setRecordingError('')
@@ -182,10 +164,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         streamRef.current?.getTracks().forEach((t) => t.stop())
         wakeLockRef.current?.release().catch(() => {})
         wakeLockRef.current = null
-        silentAudioRef.current?.pause()
-        silentAudioRef.current = null
-        audioCtxRef.current?.close().catch(() => {})
-        audioCtxRef.current = null
         setIsRecording(false)
 
         const mimeType = chunksRef.current[0]?.type || 'audio/webm'
