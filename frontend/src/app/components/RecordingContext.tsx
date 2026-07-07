@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useRef, useState, useCallback } from 'react'
 import { authHeaders } from '@/lib/auth'
 
 type RecordingContextType = {
@@ -38,7 +38,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
+
   const textRef = useRef('')
   textRef.current = text
 
@@ -117,13 +117,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         if (e.data.size > 0) chunksRef.current.push(e.data)
       }
 
-      // スリープ防止①: Wake Lock API（iOS 16.4以降 / Android Chrome対応）
-      if ('wakeLock' in navigator) {
-        try {
-          wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
-        } catch { /* 非対応環境では無視 */ }
-      }
-
       mediaRecorder.start(1000)
       setIsRecording(true)
       setRecordingError('')
@@ -138,20 +131,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // ページが再表示されたとき（スリープ復帰など）にWake Lockを再取得
-  useEffect(() => {
-    if (!isRecording) return
-    const handleVisibilityChange = async () => {
-      if (!document.hidden && 'wakeLock' in navigator) {
-        try {
-          wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
-        } catch {}
-      }
-    }
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [isRecording])
-
   const stopRecording = useCallback(async (): Promise<string> => {
     const mediaRecorder = mediaRecorderRef.current
     if (!mediaRecorder || mediaRecorder.state === 'inactive') {
@@ -162,8 +141,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return new Promise((resolve) => {
       mediaRecorder.onstop = async () => {
         streamRef.current?.getTracks().forEach((t) => t.stop())
-        wakeLockRef.current?.release().catch(() => {})
-        wakeLockRef.current = null
         setIsRecording(false)
 
         const mimeType = chunksRef.current[0]?.type || 'audio/webm'
