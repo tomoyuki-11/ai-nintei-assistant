@@ -38,8 +38,24 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const textRef = useRef('')
   textRef.current = text
+
+  // Whisperが無音音声に対して返す既知のハルシネーションパターン
+  const HALLUCINATIONS = [
+    'ご視聴ありがとうございました',
+    'チャンネル登録',
+    '字幕は自動生成されています',
+    'ありがとうございました',
+    'Thank you for watching',
+    'Subtitles by',
+  ]
+  function isHallucination(text: string): boolean {
+    const t = text.trim()
+    if (t.length === 0) return true
+    return HALLUCINATIONS.some((h) => t.includes(h))
+  }
 
   // Whisper API呼び出し（成功時は文字起こしテキスト、失敗時は null）
   const callWhisper = useCallback(async (blob: Blob, filename?: string): Promise<string | null> => {
@@ -61,7 +77,12 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) return null
 
       const data = await res.json()
-      return data.text || ''
+      const transcribed = data.text || ''
+      if (isHallucination(transcribed)) {
+        setRecordingError('録音中にスリープが発生した可能性があります。録音中は画面をオンのままにしてください。')
+        return null
+      }
+      return transcribed
     } catch {
       return null
     } finally {
@@ -96,6 +117,15 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         if (e.data.size > 0) chunksRef.current.push(e.data)
       }
 
+      // スリープ防止（iOS 16.4以降 / Android Chrome対応）
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
+        } catch {
+          // 非対応環境では無視して続行
+        }
+      }
+
       mediaRecorder.start(1000)
       setIsRecording(true)
       setRecordingError('')
@@ -120,6 +150,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return new Promise((resolve) => {
       mediaRecorder.onstop = async () => {
         streamRef.current?.getTracks().forEach((t) => t.stop())
+        wakeLockRef.current?.release().catch(() => {})
+        wakeLockRef.current = null
         setIsRecording(false)
 
         const mimeType = chunksRef.current[0]?.type || 'audio/webm'
