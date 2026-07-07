@@ -126,33 +126,25 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         } catch { /* 非対応環境では無視 */ }
       }
 
-      // PWAモード判定（iOSはstandalone === true、他はdisplay-mode: standalone）
-      const isPWA = (navigator as any).standalone === true ||
-        window.matchMedia('(display-mode: standalone)').matches
-
-      if (!isPWA) {
-        // Safariブラウザモードのみ: AudioContextでセッション維持（動作確認済み）
-        try {
-          const AudioCtxClass = (window.AudioContext || (window as any).webkitAudioContext) as any
-          if (AudioCtxClass) {
-            const audioCtx: AudioContext = new AudioCtxClass()
-            const micSource = audioCtx.createMediaStreamSource(stream)
-            const silentGain = audioCtx.createGain()
-            silentGain.gain.value = 0
-            micSource.connect(silentGain)
-            silentGain.connect(audioCtx.destination)
-            const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate)
-            const silentSource = audioCtx.createBufferSource()
-            silentSource.buffer = buffer
-            silentSource.loop = true
-            silentSource.connect(audioCtx.destination)
-            silentSource.start()
-            audioCtxRef.current = audioCtx
-          }
-        } catch { /* 非対応環境では無視 */ }
-      }
-      // PWAモードではスクリーンロックでiOSがオーディオセッションを強制中断するため
-      // Web技術では回避不可。録音中は画面をオンにするよう促す（UI側で表示）
+      // スリープ防止②: AudioContextでオーディオセッションを維持（Safari・PWA両対応）
+      try {
+        const AudioCtxClass = (window.AudioContext || (window as any).webkitAudioContext) as any
+        if (AudioCtxClass) {
+          const audioCtx: AudioContext = new AudioCtxClass()
+          const micSource = audioCtx.createMediaStreamSource(stream)
+          const silentGain = audioCtx.createGain()
+          silentGain.gain.value = 0
+          micSource.connect(silentGain)
+          silentGain.connect(audioCtx.destination)
+          const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate)
+          const silentSource = audioCtx.createBufferSource()
+          silentSource.buffer = buffer
+          silentSource.loop = true
+          silentSource.connect(audioCtx.destination)
+          silentSource.start()
+          audioCtxRef.current = audioCtx
+        }
+      } catch { /* 非対応環境では無視 */ }
 
       mediaRecorder.start(1000)
       setIsRecording(true)
