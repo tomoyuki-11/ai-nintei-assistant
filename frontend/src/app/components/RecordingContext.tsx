@@ -126,16 +126,12 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         } catch { /* 非対応環境では無視 */ }
       }
 
-      // スリープ防止②: AudioContextでオーディオセッションを維持（Safari・PWA両対応）
+      // スリープ防止②: AudioContextのサイレントバッファでオーディオセッションを維持
+      // ※ マイクストリームはAudioContextに通さない（MediaRecorderと競合して録音欠落の原因になる）
       try {
         const AudioCtxClass = (window.AudioContext || (window as any).webkitAudioContext) as any
         if (AudioCtxClass) {
           const audioCtx: AudioContext = new AudioCtxClass()
-          const micSource = audioCtx.createMediaStreamSource(stream)
-          const silentGain = audioCtx.createGain()
-          silentGain.gain.value = 0
-          micSource.connect(silentGain)
-          silentGain.connect(audioCtx.destination)
           const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate)
           const silentSource = audioCtx.createBufferSource()
           silentSource.buffer = buffer
