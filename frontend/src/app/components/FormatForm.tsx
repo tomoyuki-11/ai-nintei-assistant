@@ -364,7 +364,7 @@ export default function FormatForm() {
             <span className="text-xs text-orange-500 font-medium">⚠ 画面をオンのままにしてください</span>
           )}
           {isTranscribing && (
-            <span className="text-xs text-gray-500 font-medium">Whisperで文字起こし中...</span>
+            <span className="text-xs text-gray-500 font-medium">文字起こし中...</span>
           )}
           {saveMessage && (
             <span className="text-xs text-green-600 font-medium">✓ {saveMessage}</span>
