@@ -7,8 +7,8 @@ use axum::{
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use tower_http::cors::{Any, CorsLayer};
-use axum::http::HeaderValue;
+use tower_http::cors::CorsLayer;
+use axum::http::{HeaderValue, header::{AUTHORIZATION, CONTENT_TYPE, ACCEPT}};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
@@ -259,7 +259,7 @@ async fn main() {
         .unwrap_or_else(|_| "http://localhost:3000".to_string());
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE])
-        .allow_headers(Any)
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])
         .allow_origin(
             frontend_url
                 .parse::<HeaderValue>()

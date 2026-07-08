@@ -87,8 +87,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         return ''
       }
       return transcribed
-    } catch (e: any) {
-      setRecordingError(`[DEBUG] fetch失敗: ${e?.name} / ${e?.message}`)
+    } catch {
       return null
     } finally {
       setIsTranscribing(false)
@@ -170,7 +169,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
         const mimeType = chunksRef.current[0]?.type || 'audio/webm'
         const blob = new Blob(chunksRef.current, { type: mimeType })
-        setRecordingError(`[DEBUG] chunks:${chunksRef.current.length} type:${mimeType} size:${blob.size}`)
 
         let transcribed = await callWhisper(blob)
         if (transcribed === null) {
