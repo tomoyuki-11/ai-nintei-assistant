@@ -351,7 +351,9 @@ async fn transcribe_handler(
 
     let audio_data = audio_bytes.ok_or_else(|| (StatusCode::BAD_REQUEST, "音声データが見つかりません".to_string()))?;
 
-    let ext = if mime_type.contains("ogg") { "ogg" } else { "webm" };
+    let ext = if mime_type.contains("ogg") { "ogg" }
+              else if mime_type.contains("mp4") || mime_type.contains("m4a") { "mp4" }
+              else { "webm" };
     let filename = format!("audio.{}", ext);
 
     let part = reqwest::multipart::Part::bytes(audio_data)
