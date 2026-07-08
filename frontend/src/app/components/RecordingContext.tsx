@@ -48,7 +48,9 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   textRef.current = text
 
   const acquireWakeLock = useCallback(async () => {
-    if ('wakeLock' in navigator) {
+    // iOS Safari では MediaRecorder と干渉するため Wake Lock を使わない
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+    if ('wakeLock' in navigator && !isIOS) {
       try {
         wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
       } catch { /* 非対応・拒否時は無視 */ }
