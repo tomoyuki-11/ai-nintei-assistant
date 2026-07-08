@@ -73,15 +73,40 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       const formData = new FormData()
       formData.append('audio', blob, name)
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/transcribe`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: formData,
-      })
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe`
+      const token = authHeaders()['Authorization']
+      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
 
-      if (!res.ok) return null
+      let ok: boolean
+      let responseText: string
 
-      const data = await res.json()
+      if (isIOS) {
+        // iOS Safari は fetch + FormData + Blob が動かないため XHR を使用
+        const result = await new Promise<{ ok: boolean; text: string }>((resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('POST', url)
+          if (token) xhr.setRequestHeader('Authorization', token)
+          xhr.timeout = 120000
+          xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, text: xhr.responseText })
+          xhr.onerror = () => reject(new Error('XHR error'))
+          xhr.ontimeout = () => reject(new Error('XHR timeout'))
+          xhr.send(formData)
+        })
+        ok = result.ok
+        responseText = result.text
+      } else {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: formData,
+        })
+        ok = res.ok
+        responseText = ok ? await res.text() : ''
+      }
+
+      if (!ok) return null
+
+      const data = JSON.parse(responseText)
       const transcribed = data.text || ''
       if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
         return ''

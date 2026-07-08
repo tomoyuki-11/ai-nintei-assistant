@@ -334,6 +334,7 @@ async fn transcribe_handler(
     _auth: AuthUser,
     mut multipart: Multipart,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    tracing::info!("/api/transcribe リクエスト受信");
     if state.openai_api_key.is_empty() {
         return Err((StatusCode::SERVICE_UNAVAILABLE, "OPENAI_API_KEY が設定されていません".to_string()));
     }
