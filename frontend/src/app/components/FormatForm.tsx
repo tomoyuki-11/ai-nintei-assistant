@@ -204,11 +204,11 @@ export default function FormatForm() {
           {/* タイマー */}
           {(() => { const { h, m, s } = timeParts(recordingSeconds); return (
             <div className={`flex items-center gap-2 mb-14 ${inter.variable}`} style={{ fontFamily: '-apple-system, "SF Pro Display", BlinkMacSystemFont, var(--font-inter), system-ui, sans-serif' }}>
-              <span className="text-gray-400 text-5xl font-bold">{h}</span>
+              <span className="text-gray-400 text-5xl font-light">{h}</span>
               <Colon />
-              <span className="text-gray-400 text-5xl font-bold">{m}</span>
+              <span className="text-gray-400 text-5xl font-light">{m}</span>
               <Colon />
-              <span className="text-gray-400 text-5xl font-bold">{s}</span>
+              <span className="text-gray-400 text-5xl font-light">{s}</span>
             </div>
           ) })()}
 
