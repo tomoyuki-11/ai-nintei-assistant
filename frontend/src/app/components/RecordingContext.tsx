@@ -42,36 +42,37 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
+  const noSleepRef = useRef<any>(null)
 
   const textRef = useRef('')
   textRef.current = text
 
-  const acquireWakeLock = useCallback(async () => {
-    // iOS Safari では MediaRecorder と干渉するため Wake Lock を使わない
-    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
-    if ('wakeLock' in navigator && !isIOS) {
-      try {
-        wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
-      } catch { /* 非対応・拒否時は無視 */ }
-    }
+  const enableNoSleep = useCallback(async () => {
+    try {
+      if (!noSleepRef.current) {
+        const NoSleep = (await import('nosleep.js')).default
+        noSleepRef.current = new NoSleep()
+      }
+      await noSleepRef.current.enable()
+    } catch { /* 非対応環境では無視 */ }
   }, [])
 
-  const releaseWakeLock = useCallback(() => {
-    wakeLockRef.current?.release().catch(() => {})
-    wakeLockRef.current = null
+  const disableNoSleep = useCallback(() => {
+    try {
+      noSleepRef.current?.disable()
+    } catch {}
   }, [])
 
-  // ページが表示状態に戻ったとき、録音中ならWakeLockを再取得
+  // ページが表示状態に戻ったとき、録音中ならスリープ防止を再有効化
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && isRecording) {
-        await acquireWakeLock()
+        await enableNoSleep()
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [isRecording, acquireWakeLock])
+  }, [isRecording, enableNoSleep])
 
   // Whisperが無音音声に対して返す既知のハルシネーションパターン
   const HALLUCINATIONS = [
@@ -152,7 +153,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       setIsRecording(true)
       setIsPaused(false)
       setRecordingError('')
-      acquireWakeLock()
+      enableNoSleep()
     } catch (e: any) {
       if (e.name === 'NotAllowedError') {
         setRecordingError('マイクへのアクセスが拒否されています。ブラウザのアドレスバー左のアイコンからマイクの使用を許可してください。')
@@ -162,7 +163,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         setRecordingError(`録音エラーが発生しました（${e.name}）`)
       }
     }
-  }, [acquireWakeLock])
+  }, [enableNoSleep])
 
   const pauseRecording = useCallback(() => {
     try {
@@ -192,7 +193,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return new Promise((resolve) => {
       mediaRecorder.onstop = async () => {
         streamRef.current?.getTracks().forEach((t) => t.stop())
-        releaseWakeLock()
+        disableNoSleep()
         setIsRecording(false)
         setIsPaused(false)
 
@@ -217,7 +218,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
       mediaRecorder.stop()
     })
-  }, [callWhisper, appendTranscription, releaseWakeLock])
+  }, [callWhisper, appendTranscription, disableNoSleep])
 
   // 音声ファイルをアップロードして文字起こし（既存テキストに追記）
   const transcribeFile = useCallback(async (file: File | Blob): Promise<string> => {
