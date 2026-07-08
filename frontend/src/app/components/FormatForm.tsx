@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { Orbitron } from 'next/font/google'
+
+const orbitron = Orbitron({ subsets: ['latin'], weight: ['700'] })
 import { downloadExcel } from '@/lib/excel'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
 import { useRecording } from './RecordingContext'
@@ -200,12 +203,12 @@ export default function FormatForm() {
         <div className="fixed inset-0 z-200 bg-black flex flex-col items-center justify-center select-none">
           {/* タイマー */}
           {(() => { const { h, m, s } = timeParts(recordingSeconds); return (
-            <div className="flex items-center gap-2 mb-14">
-              <span className="text-gray-400 text-5xl font-mono font-bold tracking-[0.05em]">{h}</span>
+            <div className={`flex items-center gap-2 mb-14 ${orbitron.className}`}>
+              <span className="text-gray-400 text-5xl">{h}</span>
               <Colon />
-              <span className="text-gray-400 text-5xl font-mono font-bold tracking-[0.05em]">{m}</span>
+              <span className="text-gray-400 text-5xl">{m}</span>
               <Colon />
-              <span className="text-gray-400 text-5xl font-mono font-bold tracking-[0.05em]">{s}</span>
+              <span className="text-gray-400 text-5xl">{s}</span>
             </div>
           ) })()}
 
