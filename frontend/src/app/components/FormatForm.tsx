@@ -191,7 +191,7 @@ export default function FormatForm() {
       {isRecording && isIOS && (
         <div className="fixed inset-0 z-200 bg-black flex flex-col items-center justify-center select-none">
           {/* タイマー */}
-          <p className="text-white text-5xl font-mono font-thin tracking-[0.15em] mb-14">
+          <p className="text-gray-400 text-5xl font-mono font-bold tracking-[0.05em] mb-14">
             {formatTime(recordingSeconds)}
           </p>
 
