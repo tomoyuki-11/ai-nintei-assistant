@@ -50,12 +50,20 @@ export default function FormatForm() {
     return () => clearInterval(id)
   }, [isRecording, isPaused])
 
-  function formatTime(s: number) {
-    const h = String(Math.floor(s / 3600)).padStart(2, '0')
-    const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0')
-    const sec = String(s % 60).padStart(2, '0')
-    return `${h}:${m}:${sec}`
+  function timeParts(s: number) {
+    return {
+      h: String(Math.floor(s / 3600)).padStart(2, '0'),
+      m: String(Math.floor((s % 3600) / 60)).padStart(2, '0'),
+      s: String(s % 60).padStart(2, '0'),
+    }
   }
+
+  const Colon = () => (
+    <div className="flex flex-col gap-1.5 pb-0.5">
+      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+    </div>
+  )
 
   useEffect(() => {
     return () => { clearRecording() }
@@ -191,9 +199,15 @@ export default function FormatForm() {
       {isRecording && isIOS && (
         <div className="fixed inset-0 z-200 bg-black flex flex-col items-center justify-center select-none">
           {/* タイマー */}
-          <p className="text-gray-400 text-5xl font-semibold tracking-tight mb-14">
-            {formatTime(recordingSeconds)}
-          </p>
+          {(() => { const { h, m, s } = timeParts(recordingSeconds); return (
+            <div className="flex items-center gap-2 mb-14">
+              <span className="text-gray-400 text-5xl font-mono font-bold tracking-[0.05em]">{h}</span>
+              <Colon />
+              <span className="text-gray-400 text-5xl font-mono font-bold tracking-[0.05em]">{m}</span>
+              <Colon />
+              <span className="text-gray-400 text-5xl font-mono font-bold tracking-[0.05em]">{s}</span>
+            </div>
+          ) })()}
 
           {/* 録音インジケーター */}
           <div className="flex items-center justify-center mb-14">
@@ -233,7 +247,7 @@ export default function FormatForm() {
           </div>
 
           {showScreenWarning && !isPaused && (
-            <p className="text-gray-500 text-sm mt-12">画面をオンのままにしてください</p>
+            <p className="text-gray-500 text-lg mt-12">画面をオンのままにしてください</p>
           )}
         </div>
       )}
