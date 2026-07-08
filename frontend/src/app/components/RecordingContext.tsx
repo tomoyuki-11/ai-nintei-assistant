@@ -32,6 +32,16 @@ function getExtFromMime(mimeType: string): string {
   return 'webm'
 }
 
+function getMimeFromExt(ext: string): string {
+  switch (ext.toLowerCase()) {
+    case 'mp4': case 'm4a': return 'audio/mp4'
+    case 'ogg': return 'audio/ogg'
+    case 'mp3': case 'mpeg': return 'audio/mpeg'
+    case 'wav': return 'audio/wav'
+    default: return 'audio/webm'
+  }
+}
+
 export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const [isRecording, setIsRecording] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
@@ -66,8 +76,9 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const callWhisper = useCallback(async (blob: Blob, filename?: string): Promise<string | null> => {
     setIsTranscribing(true)
     try {
-      const mimeType = blob.type || 'audio/webm'
-      const ext = filename ? filename.split('.').pop() || getExtFromMime(mimeType) : getExtFromMime(mimeType)
+      const rawExt = filename ? (filename.split('.').pop()?.toLowerCase() ?? '') : ''
+      const ext = rawExt || getExtFromMime(blob.type || 'audio/webm')
+      const mimeType = blob.type || getMimeFromExt(ext)
       const name = filename || `audio.${ext}`
 
       const url = `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe`
