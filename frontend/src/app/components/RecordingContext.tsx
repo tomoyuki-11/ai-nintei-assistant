@@ -200,9 +200,14 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         const mimeType = chunksRef.current[0]?.type || 'audio/webm'
         const blob = new Blob(chunksRef.current, { type: mimeType })
 
-        const transcribed = await callWhisper(blob)
+        let transcribed = await callWhisper(blob)
         if (transcribed === null) {
-          // API/ネットワークエラー → 録音音声を保存してリトライ可能にする
+          // スリープ後のネットワーク回復を待って1回自動リトライ
+          await new Promise((r) => setTimeout(r, 3000))
+          transcribed = await callWhisper(blob)
+        }
+        if (transcribed === null) {
+          // リトライも失敗 → 録音音声を保存して手動リトライを促す
           setPendingAudio(blob)
           setRecordingError('文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。')
           resolve(textRef.current)
