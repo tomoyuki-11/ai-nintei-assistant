@@ -371,7 +371,7 @@ export default function FormatForm() {
           )}
         </div>
         {/* 音声ファイルアップロード / 録音済み音声リトライ */}
-        <div className="flex items-center gap-2 mt-1">
+        <div className="flex items-center gap-2 mt-1 mb-3">
           <input
             ref={fileInputRef}
             type="file"
