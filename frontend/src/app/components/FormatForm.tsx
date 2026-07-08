@@ -50,20 +50,12 @@ export default function FormatForm() {
     return () => clearInterval(id)
   }, [isRecording, isPaused])
 
-  function timeParts(s: number) {
-    return {
-      h: String(Math.floor(s / 3600)).padStart(2, '0'),
-      m: String(Math.floor((s % 3600) / 60)).padStart(2, '0'),
-      s: String(s % 60).padStart(2, '0'),
-    }
+  function formatTime(s: number) {
+    const h = String(Math.floor(s / 3600)).padStart(2, '0')
+    const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0')
+    const sec = String(s % 60).padStart(2, '0')
+    return `${h}:${m}:${sec}`
   }
-
-  const Colon = () => (
-    <div className="flex flex-col gap-1.5 pb-0.5">
-      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-    </div>
-  )
 
   useEffect(() => {
     return () => { clearRecording() }
@@ -199,15 +191,9 @@ export default function FormatForm() {
       {isRecording && isIOS && (
         <div className="fixed inset-0 z-200 bg-black flex flex-col items-center justify-center select-none">
           {/* タイマー */}
-          {(() => { const { h, m, s } = timeParts(recordingSeconds); return (
-            <div className="flex items-center gap-2 mb-14">
-              <span className="text-gray-400 text-5xl font-mono font-semibold">{h}</span>
-              <Colon />
-              <span className="text-gray-400 text-5xl font-mono font-semibold">{m}</span>
-              <Colon />
-              <span className="text-gray-400 text-5xl font-mono font-semibold">{s}</span>
-            </div>
-          ) })()}
+          <p className="text-gray-400 text-5xl font-semibold tracking-tight mb-14">
+            {formatTime(recordingSeconds)}
+          </p>
 
           {/* 録音インジケーター */}
           <div className="flex items-center justify-center mb-14">
