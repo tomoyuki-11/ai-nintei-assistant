@@ -35,6 +35,8 @@ export default function FormatForm() {
   const [isIOS, setIsIOS] = useState(false)
   const [showScreenWarning, setShowScreenWarning] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [showAutoLockModal, setShowAutoLockModal] = useState(false)
+  const [autoLockDontShow, setAutoLockDontShow] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -97,6 +99,14 @@ export default function FormatForm() {
   function showSaveMessage(msg: string) {
     setSaveMessage(msg)
     setTimeout(() => setSaveMessage(''), 3000)
+  }
+
+  function handleStartRecordingClick() {
+    if (isIOS && !localStorage.getItem('autoLockConfirmed')) {
+      setShowAutoLockModal(true)
+      return
+    }
+    startRecording()
   }
 
   async function handleStopRecording() {
@@ -255,6 +265,48 @@ export default function FormatForm() {
         </div>
       )}
 
+      {/* iOS 自動ロック確認モーダル */}
+      {showAutoLockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
+            <p className="text-sm font-semibold text-gray-900 mb-3">録音前に確認してください</p>
+            <p className="text-sm text-gray-600 mb-4">
+              スリープ中は録音が停止します。長時間の録音には自動ロックをオフにすることをお勧めします。
+            </p>
+            <p className="text-xs bg-gray-100 rounded-lg px-3 py-2 text-gray-700 mb-5">
+              設定 → 画面表示と明るさ → 自動ロック → なし
+            </p>
+            <label className="flex items-center gap-2 text-xs text-gray-500 mb-5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoLockDontShow}
+                onChange={(e) => setAutoLockDontShow(e.target.checked)}
+                className="rounded"
+              />
+              次回から表示しない
+            </label>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAutoLockModal(false)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                閉じる
+              </button>
+              <button
+                onClick={() => {
+                  if (autoLockDontShow) localStorage.setItem('autoLockConfirmed', '1')
+                  setShowAutoLockModal(false)
+                  startRecording()
+                }}
+                className="flex-1 rounded-lg bg-red-500 px-4 py-2 text-sm text-white font-medium hover:bg-red-600 transition-colors"
+              >
+                設定済み・録音開始
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI整形確認モーダル */}
       {showFormatConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -347,7 +399,7 @@ export default function FormatForm() {
             </button>
           ) : !isRecording ? (
             <button
-              onClick={startRecording}
+              onClick={handleStartRecordingClick}
               className="flex items-center gap-1.5 rounded-full bg-red-500 px-4 py-1.5 text-sm text-white font-medium hover:bg-red-600 transition-colors"
             >
               <span className="inline-block w-3 h-3 rounded-full bg-white" /> 録音開始
