@@ -233,7 +233,7 @@ export default function FormatForm() {
           </div>
 
           {showScreenWarning && !isPaused && (
-            <p className="text-gray-700 text-xs mt-12">⚠ 画面をオンのままにしてください</p>
+            <p className="text-gray-600 text-xs mt-12 tracking-wider">画面をオンのままにしてください</p>
           )}
         </div>
       )}
