@@ -201,7 +201,7 @@ export default function FormatForm() {
           </div>
 
           {/* ステータス */}
-          <p className="text-gray-500 text-xs tracking-[0.3em] uppercase mb-14">
+          <p className="text-gray-500 text-sm mb-14">
             {isPaused ? '一時停止中' : '録音中'}
           </p>
 
@@ -233,7 +233,7 @@ export default function FormatForm() {
           </div>
 
           {showScreenWarning && !isPaused && (
-            <p className="text-gray-600 text-xs mt-12 tracking-wider">画面をオンのままにしてください</p>
+            <p className="text-gray-500 text-sm mt-12">画面をオンのままにしてください</p>
           )}
         </div>
       )}
