@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{FromRequest, Multipart, Path, State},
     http::{Method, StatusCode},
     routing::{get, post},
     Json, Router,
@@ -332,34 +332,64 @@ async fn mark_downloaded_handler(
 async fn transcribe_handler(
     State(state): State<AppState>,
     _auth: AuthUser,
-    mut multipart: Multipart,
+    req: axum::extract::Request,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     tracing::info!("/api/transcribe リクエスト受信");
     if state.openai_api_key.is_empty() {
+        tracing::error!("OPENAI_API_KEY が設定されていません");
         return Err((StatusCode::SERVICE_UNAVAILABLE, "OPENAI_API_KEY が設定されていません".to_string()));
     }
 
-    let mut audio_bytes: Option<Vec<u8>> = None;
-    let mut mime_type = "audio/webm".to_string();
+    let content_type = req.headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
 
-    while let Some(field) = multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
-        if field.name().unwrap_or("") == "audio" {
-            mime_type = field.content_type().unwrap_or("audio/webm").to_string();
-            let data = field.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-            audio_bytes = Some(data.to_vec());
+    tracing::info!("Content-Type: {}", content_type);
+
+    let (audio_data, mime_type) = if content_type.starts_with("multipart/") {
+        let mut multipart = Multipart::from_request(req, &state).await
+            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+        let mut audio_bytes: Option<Vec<u8>> = None;
+        let mut mime = "audio/webm".to_string();
+
+        while let Some(field) = multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
+            if field.name().unwrap_or("") == "audio" {
+                mime = field.content_type().unwrap_or("audio/webm").to_string();
+                let data = field.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+                audio_bytes = Some(data.to_vec());
+            }
         }
-    }
 
-    let audio_data = audio_bytes.ok_or_else(|| (StatusCode::BAD_REQUEST, "音声データが見つかりません".to_string()))?;
+        let audio = audio_bytes.ok_or_else(|| (StatusCode::BAD_REQUEST, "音声データが見つかりません".to_string()))?;
+        (audio, mime)
+    } else {
+        // iOS Safari: Blob を直接送信（FormData なし）
+        let mime = content_type.split(';').next().unwrap_or("audio/mp4").trim().to_string();
+        let bytes = axum::body::to_bytes(req.into_body(), 100 * 1024 * 1024)
+            .await
+            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        (bytes.to_vec(), mime)
+    };
+
+    tracing::info!("音声データ: {} bytes, mime: {}", audio_data.len(), mime_type);
 
     let ext = if mime_type.contains("ogg") { "ogg" }
               else if mime_type.contains("mp4") || mime_type.contains("m4a") { "mp4" }
               else { "webm" };
     let filename = format!("audio.{}", ext);
 
+    let whisper_mime = match ext {
+        "ogg" => "audio/ogg",
+        "mp4" => "audio/mp4",
+        _ => "audio/webm",
+    };
+
     let part = reqwest::multipart::Part::bytes(audio_data)
         .file_name(filename)
-        .mime_str(&mime_type)
+        .mime_str(whisper_mime)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let form = reqwest::multipart::Form::new()
@@ -385,6 +415,7 @@ async fn transcribe_handler(
     let data: serde_json::Value = response.json().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    tracing::info!("Whisper 成功");
     Ok(Json(serde_json::json!({ "text": data["text"] })))
 }
 

@@ -70,31 +70,24 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       const ext = filename ? filename.split('.').pop() || getExtFromMime(mimeType) : getExtFromMime(mimeType)
       const name = filename || `audio.${ext}`
 
-      const formData = new FormData()
-      formData.append('audio', blob, name)
-
       const url = `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe`
-      const token = authHeaders()['Authorization']
       const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
 
       let ok: boolean
       let responseText: string
 
       if (isIOS) {
-        // iOS Safari は fetch + FormData + Blob が動かないため XHR を使用
-        const result = await new Promise<{ ok: boolean; text: string }>((resolve, reject) => {
-          const xhr = new XMLHttpRequest()
-          xhr.open('POST', url)
-          if (token) xhr.setRequestHeader('Authorization', token)
-          xhr.timeout = 120000
-          xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, text: xhr.responseText })
-          xhr.onerror = () => reject(new Error('XHR error'))
-          xhr.ontimeout = () => reject(new Error('XHR timeout'))
-          xhr.send(formData)
+        // iOS Safari: FormData のマルチパート送信が壊れるため Blob を直接送信
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': mimeType },
+          body: blob,
         })
-        ok = result.ok
-        responseText = result.text
+        ok = res.ok
+        responseText = ok ? await res.text() : ''
       } else {
+        const formData = new FormData()
+        formData.append('audio', blob, name)
         const res = await fetch(url, {
           method: 'POST',
           headers: authHeaders(),
