@@ -33,6 +33,7 @@ export default function FormatForm() {
   const [showFormatConfirm, setShowFormatConfirm] = useState(false)
   const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null)
   const [isIOS, setIsIOS] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const [showScreenWarning, setShowScreenWarning] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [showAutoLockModal, setShowAutoLockModal] = useState(false)
@@ -45,6 +46,7 @@ export default function FormatForm() {
     const ua = navigator.userAgent
     const ios = /iPhone|iPad|iPod/.test(ua)
     setIsIOS(ios)
+    setIsMobile(/iPhone|iPad|iPod|Android/.test(ua))
     // 警告はSafari（Chrome等を除く）またはPWAのみ
     // iOSは全ブラウザ（Safari・Chrome等）でスリープ時に音声セッションが中断されるため警告表示
     setShowScreenWarning(ios)
@@ -302,6 +304,7 @@ export default function FormatForm() {
           {showScreenWarning && !isPaused && (
             <p className="text-gray-500 text-lg mt-12">画面をオンのままにしてください</p>
           )}
+          <p className="text-gray-700 text-xs mt-4">リロードすると録音が停止します</p>
         </div>
       )}
 
@@ -506,6 +509,9 @@ export default function FormatForm() {
           )}
           {isRecording && showScreenWarning && (
             <span className="text-xs text-orange-500 font-medium">⚠ 画面をオンのままにしてください</span>
+          )}
+          {isRecording && isMobile && !isIOS && (
+            <span className="text-xs text-orange-500 font-medium">⚠ リロードすると録音が停止します</span>
           )}
           {isTranscribing && (
             <span className="text-xs text-gray-500 font-medium">文字起こし中...</span>
