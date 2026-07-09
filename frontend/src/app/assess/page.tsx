@@ -14,6 +14,7 @@ export default function AssessPage() {
   useEffect(() => {
     if (!isAuthenticated()) router.push('/start')
     setPipelinePending(!!localStorage.getItem('pipeline_pending'))
+    window.scrollTo(0, 0)
   }, [router])
 
   const hasRecordingData =

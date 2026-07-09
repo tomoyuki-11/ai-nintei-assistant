@@ -17,6 +17,7 @@ export default function TextPage() {
 
   useEffect(() => {
     if (!isAuthenticated()) router.push('/start')
+    window.scrollTo(0, 0)
   }, [router])
 
   useEffect(() => {

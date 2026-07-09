@@ -20,6 +20,7 @@ export default function AudioPage() {
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
     setText('')
+    window.scrollTo(0, 0)
   }, [router, setText])
 
   useEffect(() => {
