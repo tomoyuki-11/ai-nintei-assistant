@@ -21,7 +21,7 @@ type ConfirmState =
 
 export default function FormatForm() {
   const router = useRouter()
-  const { isRecording, isPaused, isTranscribing, text, setText, recordingError, setRecordingError, pendingAudio, downloadableAudio, startRecording, stopRecording, pauseRecording, resumeRecording, transcribeFile, retryTranscription, downloadAudio, clearPendingAudio, clearRecording } = useRecording()
+  const { isRecording, isPaused, isTranscribing, text, setText, recordingError, setRecordingError, pendingAudio, downloadableAudio, hasPendingRecovery, startRecording, stopRecording, pauseRecording, resumeRecording, transcribeFile, retryTranscription, recoverAndTranscribe, discardRecovery, downloadAudio, clearPendingAudio, clearRecording } = useRecording()
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -566,6 +566,29 @@ export default function FormatForm() {
             </button>
           )}
         </div>
+        {/* リロード中断からの録音復元 */}
+        {hasPendingRecovery && (
+          <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-3">
+            <p className="text-xs font-medium text-orange-800 mb-1">前回の録音データが見つかりました</p>
+            <p className="text-xs text-orange-700 mb-2">リロード前の録音音声が保存されています。文字起こしを行いますか？</p>
+            <div className="flex gap-2">
+              <button
+                onClick={async () => { await recoverAndTranscribe() }}
+                disabled={isTranscribing}
+                className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors"
+              >
+                文字起こしする
+              </button>
+              <button
+                onClick={discardRecovery}
+                disabled={isTranscribing}
+                className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors"
+              >
+                破棄する
+              </button>
+            </div>
+          </div>
+        )}
         <textarea
           value={text}
           onChange={(e) => { setText(e.target.value); setSavedId(null) }}
