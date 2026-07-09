@@ -35,6 +35,15 @@ export default function HomePage() {
   const [splash, setSplash] = useState<'visible' | 'fading' | 'hidden'>('visible')
 
   useEffect(() => {
+    document.body.style.height = '100%'
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.height = ''
+      document.body.style.overflow = ''
+    }
+  }, [])
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       if (params.get('checkout') === 'success') {
