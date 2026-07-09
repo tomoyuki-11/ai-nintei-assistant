@@ -12,7 +12,6 @@ export default function AudioPage() {
   const { isTranscribing, setText, transcribeFile, recordingError, setRecordingError } = useRecording()
 
   const [file, setFile] = useState<File | null>(null)
-  const [transcribedText, setTranscribedText] = useState('')
   const [isFormatting, setIsFormatting] = useState(false)
   const [result, setResult] = useState('')
   const [error, setError] = useState('')
@@ -33,16 +32,14 @@ export default function AudioPage() {
     return () => clearTimeout(t)
   }, [error])
 
-  async function handleTranscribe() {
+  async function handleSubmit() {
     if (!file) return
-    const text = await transcribeFile(file)
-    if (text.trim()) setTranscribedText(text)
-  }
-
-  async function handleFormat() {
-    if (!transcribedText.trim()) return
-    setIsFormatting(true)
     setError('')
+
+    const transcribedText = await transcribeFile(file)
+    if (!transcribedText.trim()) return
+
+    setIsFormatting(true)
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/format`, {
         method: 'POST',
@@ -67,7 +64,6 @@ export default function AudioPage() {
 
   function handleReset() {
     setFile(null)
-    setTranscribedText('')
     setResult('')
     setError('')
     setText('')
@@ -109,11 +105,11 @@ export default function AudioPage() {
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {/* 処理中スピナー */}
+          <div className="rounded-xl bg-white border border-gray-200 p-6 shadow-sm space-y-4">
+            {/* 処理中 */}
             {isBusy && (
-              <div className="rounded-xl bg-white border border-gray-200 p-8 text-center shadow-sm">
-                <div className="inline-block w-7 h-7 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-4" />
+              <div className="py-4 text-center">
+                <div className="inline-block w-7 h-7 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-3" />
                 <p className="text-sm font-medium text-gray-700">
                   {isTranscribing ? '文字起こし中...' : 'AI整形中...'}
                 </p>
@@ -122,8 +118,8 @@ export default function AudioPage() {
             )}
 
             {/* ファイル選択 */}
-            {!isBusy && !transcribedText && (
-              <div className="rounded-xl bg-white border border-gray-200 p-6 shadow-sm">
+            {!isBusy && (
+              <>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -131,49 +127,27 @@ export default function AudioPage() {
                   className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f) }}
                 />
-                <div className="text-center">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 w-full py-8 text-sm text-gray-500 hover:border-blue-400 hover:bg-blue-50 transition-colors"
-                  >
-                    {file ? (
-                      <span className="text-gray-700 font-medium">{file.name}</span>
-                    ) : (
-                      <span>ファイルを選択<br /><span className="text-xs text-gray-400 mt-1 block">mp3 / m4a / wav / mp4 / ogg / flac / webm</span></span>
-                    )}
-                  </button>
-                </div>
-                {file && (
-                  <button
-                    onClick={handleTranscribe}
-                    disabled={isBusy}
-                    className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    文字起こしを開始
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* 文字起こし完了 → 整形ボタン */}
-            {!isBusy && transcribedText && (
-              <div className="rounded-xl bg-white border border-gray-200 p-6 shadow-sm space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="inline-block w-4 h-4 rounded-full bg-green-500 flex-shrink-0" />
-                  <p className="text-sm font-medium text-gray-700">文字起こし完了</p>
-                </div>
-                <p className="text-xs text-gray-500">ファイル：{file?.name}</p>
                 <button
-                  onClick={handleFormat}
-                  disabled={isBusy}
-                  className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 w-full py-8 text-sm text-gray-500 hover:border-blue-400 hover:bg-blue-50 transition-colors"
                 >
-                  整形する
+                  {file ? (
+                    <span className="text-gray-700 font-medium">{file.name}</span>
+                  ) : (
+                    <>
+                      ファイルを選択
+                      <span className="text-xs text-gray-400 mt-1 block">mp3 / m4a / wav / mp4 / ogg / flac / webm</span>
+                    </>
+                  )}
                 </button>
-                <button onClick={handleReset} className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
-                  キャンセル
+                <button
+                  onClick={handleSubmit}
+                  disabled={!file}
+                  className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  AI整形を実行
                 </button>
-              </div>
+              </>
             )}
           </div>
         )}
