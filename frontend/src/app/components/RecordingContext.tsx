@@ -292,13 +292,24 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
 
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      const isIOSDevice = /iPhone|iPad|iPod/.test(navigator.userAgent)
+
+      // iOSはwebm/oggを録音できないためmimeType指定なしでデフォルト（audio/mp4）に任せる
+      const selectedMimeType = isIOSDevice
+        ? ''
+        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/webm')
         ? 'audio/webm'
         : 'audio/ogg'
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType })
+      const mediaRecorder = selectedMimeType
+        ? new MediaRecorder(stream, { mimeType: selectedMimeType })
+        : new MediaRecorder(stream)
+
+      // 実際に使われているmimeTypeを取得（iOSではaudio/mp4になる）
+      const actualMimeType = mediaRecorder.mimeType || (isIOSDevice ? 'audio/mp4' : 'audio/webm')
+
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
       setDownloadableAudio(null)
@@ -307,7 +318,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         if (e.data.size > 0) {
           chunksRef.current.push(e.data)
           // リロード時の復元用にIndexedDBへ随時保存（fire and forget）
-          appendChunkToDB(e.data, mimeType)
+          appendChunkToDB(e.data, actualMimeType)
         }
       }
 
@@ -360,7 +371,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         // 正常停止したのでIndexedDBの回復データは不要
         clearRecoveryDB()
 
-        const mimeType = chunksRef.current[0]?.type || 'audio/webm'
+        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+        const mimeType = chunksRef.current[0]?.type || (isIOS ? 'audio/mp4' : 'audio/webm')
         const { result, failedGroupBlob, fullBlob } = await transcribeChunks(
           chunksRef.current, mimeType, callWhisper
         )
