@@ -12,6 +12,7 @@ type RecordingContextType = {
   recordingError: string
   setRecordingError: (error: string) => void
   pendingAudio: Blob | null
+  downloadableAudio: Blob | null
   startRecording: () => void
   stopRecording: () => Promise<string>
   pauseRecording: () => void
@@ -75,6 +76,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const [text, setText] = useState('')
   const [recordingError, setRecordingError] = useState('')
   const [pendingAudio, setPendingAudio] = useState<Blob | null>(null)
+  const [downloadableAudio, setDownloadableAudio] = useState<Blob | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
@@ -171,6 +173,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       const mediaRecorder = new MediaRecorder(stream, { mimeType })
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
+      setDownloadableAudio(null)
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data)
@@ -233,18 +236,22 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
             transcribed = await callWhisper(blob)
           }
           if (transcribed === null) {
+            setDownloadableAudio(blob)
             setPendingAudio(blob)
             setRecordingError('文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。')
             resolve(textRef.current)
           } else if (transcribed === '') {
+            // 無音 → ダウンロード不要のためdownloadableAudioは設定しない
             setRecordingError('音声が検出されませんでした。スリープ中は録音が途切れることがあります。画面をオンのままにしてください。')
             resolve(textRef.current)
           } else {
+            setDownloadableAudio(blob)
             setPendingAudio(null)
             resolve(appendTranscription(transcribed))
           }
         } else {
           // 25MB超：チャンク分割して順次送信
+          const fullBlob = new Blob(chunksRef.current, { type: mimeType })
           const groups = splitChunksIntoGroups(chunksRef.current, MAX_WHISPER_BYTES)
           const accumulated: string[] = []
 
@@ -260,6 +267,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
               const newText = accumulated.length > 0
                 ? appendTranscription(accumulated.join('\n'))
                 : textRef.current
+              setDownloadableAudio(fullBlob)
               setPendingAudio(groupBlob)
               setRecordingError('文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。')
               resolve(newText)
@@ -269,9 +277,11 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           }
 
           if (accumulated.length === 0) {
+            // 全て無音 → ダウンロード不要
             setRecordingError('音声が検出されませんでした。スリープ中は録音が途切れることがあります。画面をオンのままにしてください。')
             resolve(textRef.current)
           } else {
+            setDownloadableAudio(fullBlob)
             setPendingAudio(null)
             resolve(appendTranscription(accumulated.join('\n')))
           }
@@ -314,10 +324,10 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   }, [pendingAudio, callWhisper, appendTranscription])
 
   const downloadAudio = useCallback(() => {
-    if (!pendingAudio) return
-    const ext = getExtFromMime(pendingAudio.type)
+    if (!downloadableAudio) return
+    const ext = getExtFromMime(downloadableAudio.type)
     const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-    const url = URL.createObjectURL(pendingAudio)
+    const url = URL.createObjectURL(downloadableAudio)
     const a = document.createElement('a')
     a.href = url
     a.download = `recording_${ts}.${ext}`
@@ -325,7 +335,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  }, [pendingAudio])
+  }, [downloadableAudio])
 
   const clearPendingAudio = useCallback(() => {
     setPendingAudio(null)
@@ -335,6 +345,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     setText('')
     chunksRef.current = []
     setPendingAudio(null)
+    setDownloadableAudio(null)
   }, [])
 
   return (
@@ -347,6 +358,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       recordingError,
       setRecordingError,
       pendingAudio,
+      downloadableAudio,
       startRecording,
       stopRecording,
       pauseRecording,

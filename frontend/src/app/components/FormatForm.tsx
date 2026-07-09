@@ -21,7 +21,7 @@ type ConfirmState =
 
 export default function FormatForm() {
   const router = useRouter()
-  const { isRecording, isPaused, isTranscribing, text, setText, recordingError, setRecordingError, pendingAudio, startRecording, stopRecording, pauseRecording, resumeRecording, transcribeFile, retryTranscription, downloadAudio, clearPendingAudio, clearRecording } = useRecording()
+  const { isRecording, isPaused, isTranscribing, text, setText, recordingError, setRecordingError, pendingAudio, downloadableAudio, startRecording, stopRecording, pauseRecording, resumeRecording, transcribeFile, retryTranscription, downloadAudio, clearPendingAudio, clearRecording } = useRecording()
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -37,6 +37,8 @@ export default function FormatForm() {
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [showAutoLockModal, setShowAutoLockModal] = useState(false)
   const [autoLockDontShow, setAutoLockDontShow] = useState(false)
+  const [showDownloadHint, setShowDownloadHint] = useState(false)
+  const [downloadHintDontShow, setDownloadHintDontShow] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -73,6 +75,13 @@ export default function FormatForm() {
   useEffect(() => {
     return () => { clearRecording() }
   }, [clearRecording])
+
+  useEffect(() => {
+    if (downloadableAudio && !localStorage.getItem('audioDownloadHintDismissed')) {
+      setDownloadHintDontShow(false)
+      setShowDownloadHint(true)
+    }
+  }, [downloadableAudio])
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
@@ -307,6 +316,48 @@ export default function FormatForm() {
         </div>
       )}
 
+      {/* 音声ダウンロードヒントモーダル */}
+      {showDownloadHint && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
+            <p className="text-sm font-semibold text-gray-900 mb-3">録音音声について</p>
+            <p className="text-sm text-gray-600 mb-5">
+              音声のダウンロードは任意です。文字起こしはすでに完了しています。このページを閉じると音声はダウンロードできなくなります。
+            </p>
+            <label className="flex items-center gap-2 text-xs text-gray-500 mb-5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={downloadHintDontShow}
+                onChange={(e) => setDownloadHintDontShow(e.target.checked)}
+                className="rounded"
+              />
+              次回から表示しない
+            </label>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  if (downloadHintDontShow) localStorage.setItem('audioDownloadHintDismissed', '1')
+                  setShowDownloadHint(false)
+                }}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                閉じる
+              </button>
+              <button
+                onClick={() => {
+                  if (downloadHintDontShow) localStorage.setItem('audioDownloadHintDismissed', '1')
+                  setShowDownloadHint(false)
+                  downloadAudio()
+                }}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors"
+              >
+                ダウンロード
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI整形確認モーダル */}
       {showFormatConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -453,7 +504,7 @@ export default function FormatForm() {
               録音済み音声を文字起こし
             </button>
           )}
-          {pendingAudio && (
+          {downloadableAudio && (
             <button
               onClick={downloadAudio}
               disabled={isTranscribing}
