@@ -96,6 +96,48 @@ async function clearDownloadableAudio(): Promise<void> {
   } catch { /* 無視 */ }
 }
 
+async function savePendingAudioToDB(blob: Blob): Promise<void> {
+  try {
+    const db = await openRecoveryDB()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(DOWNLOAD_STORE, 'readwrite')
+      tx.objectStore(DOWNLOAD_STORE).put(blob, 'pending')
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  } catch { /* ストレージエラーは無視 */ }
+}
+
+async function getPendingAudioFromDB(): Promise<Blob | null> {
+  try {
+    const db = await openRecoveryDB()
+    const blob: Blob | undefined = await new Promise((resolve, reject) => {
+      const tx = db.transaction(DOWNLOAD_STORE, 'readonly')
+      const req = tx.objectStore(DOWNLOAD_STORE).get('pending')
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+    return blob ?? null
+  } catch {
+    return null
+  }
+}
+
+async function clearPendingAudioFromDB(): Promise<void> {
+  try {
+    const db = await openRecoveryDB()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(DOWNLOAD_STORE, 'readwrite')
+      tx.objectStore(DOWNLOAD_STORE).delete('pending')
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  } catch { /* 無視 */ }
+}
+
 async function appendChunkToDB(chunk: Blob, mimeType: string): Promise<void> {
   try {
     const db = await openRecoveryDB()
@@ -271,6 +313,22 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [downloadableAudio])
 
+  // 起動時にpendingAudioをIndexedDBから復元する
+  useEffect(() => {
+    getPendingAudioFromDB().then(blob => {
+      if (blob) setPendingAudio(blob)
+    })
+  }, [])
+
+  // pendingAudioが変わるたびにIndexedDBへ同期する
+  useEffect(() => {
+    if (pendingAudio) {
+      savePendingAudioToDB(pendingAudio)
+    } else {
+      clearPendingAudioFromDB()
+    }
+  }, [pendingAudio])
+
   // Whisperが無音音声に対して返す既知のハルシネーションパターン
   const HALLUCINATIONS = [
     'ご視聴ありがとうございました',
@@ -376,6 +434,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
       setDownloadableAudio(null)
+      setPendingAudio(null)
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
