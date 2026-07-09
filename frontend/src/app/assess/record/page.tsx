@@ -33,6 +33,7 @@ export default function RecordPage() {
   const [showDownloadHint, setShowDownloadHint] = useState(false)
   const [downloadHintDontShow, setDownloadHintDontShow] = useState(false)
   const savedIdRef = useRef<string | null>(null)
+  const recordedThisSessionRef = useRef(false)
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
@@ -80,11 +81,11 @@ export default function RecordPage() {
   }, [isRecording])
 
   useEffect(() => {
-    if (downloadableAudio && !result && !localStorage.getItem('audioDownloadHintDismissed')) {
+    if (downloadableAudio && recordedThisSessionRef.current && !localStorage.getItem('audioDownloadHintDismissed')) {
       setDownloadHintDontShow(false)
       setShowDownloadHint(true)
     }
-  }, [downloadableAudio, result])
+  }, [downloadableAudio])
 
   useEffect(() => {
     if (recordingError) { setError(recordingError); setRecordingError('') }
@@ -157,6 +158,7 @@ export default function RecordPage() {
   }
 
   async function handleStopRecording() {
+    recordedThisSessionRef.current = true
     const currentText = await stopRecording()
     if (!currentText.trim()) return
     const id = await saveTranscription(currentText)
