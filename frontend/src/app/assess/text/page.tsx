@@ -8,7 +8,9 @@ import { authHeaders, isAuthenticated } from '@/lib/auth'
 
 export default function TextPage() {
   const router = useRouter()
-  const [text, setText] = useState('')
+  const [text, setText] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('text_draft') ?? '' : ''
+  )
   const [isFormatting, setIsFormatting] = useState(false)
   const [result, setResult] = useState('')
   const [error, setError] = useState('')
@@ -16,6 +18,14 @@ export default function TextPage() {
   useEffect(() => {
     if (!isAuthenticated()) router.push('/start')
   }, [router])
+
+  useEffect(() => {
+    if (text) {
+      localStorage.setItem('text_draft', text)
+    } else {
+      localStorage.removeItem('text_draft')
+    }
+  }, [text])
 
   useEffect(() => {
     if (!error) return
@@ -40,6 +50,7 @@ export default function TextPage() {
       if (!res.ok) throw new Error(`エラー: ${res.status}`)
       const data = await res.json()
       setResult(data.formatted)
+      localStorage.removeItem('text_draft')
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
       const msg = e instanceof Error ? e.message : ''
@@ -56,6 +67,7 @@ export default function TextPage() {
     setText('')
     setResult('')
     setError('')
+    localStorage.removeItem('text_draft')
   }
 
   return (
