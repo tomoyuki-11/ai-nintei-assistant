@@ -7,14 +7,14 @@ import { isAuthenticated } from '@/lib/auth'
 
 const methods = [
   {
-    href: '/assess/audio',
+    href: '/assess/record',
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
       </svg>
     ),
-    title: '音声ファイルを整形',
-    desc: '録音済みの音声ファイルをアップロードして整形します',
+    title: '録音して整形',
+    desc: 'その場で録音して自動で文字起こし・整形を行います',
   },
   {
     href: '/assess/text',
@@ -27,14 +27,14 @@ const methods = [
     desc: 'テキストを貼り付けてAIが認定調査票形式に整形します',
   },
   {
-    href: '/assess/record',
+    href: '/assess/audio',
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
       </svg>
     ),
-    title: '録音して整形',
-    desc: 'その場で録音して自動で文字起こし・整形を行います',
+    title: '音声ファイルを整形',
+    desc: '録音済みの音声ファイルをアップロードして整形します',
   },
 ]
 
@@ -61,19 +61,20 @@ export default function AssessPage() {
           </Link>
         </div>
 
-        <div className="space-y-3">
+        {/* モバイル：縦並び / PC：横並び3列 */}
+        <div className="flex flex-col sm:flex-row gap-3">
           {methods.map((m) => (
             <Link
               key={m.href}
               href={m.href}
-              className="flex items-center gap-4 rounded-xl bg-white border border-gray-200 px-5 py-4 shadow-sm hover:shadow-md hover:border-blue-300 active:bg-gray-50 transition-all"
+              className="flex sm:flex-col items-center sm:items-start gap-4 sm:gap-3 rounded-xl bg-white border border-gray-200 px-5 py-4 sm:p-5 shadow-sm hover:shadow-md hover:border-blue-300 active:bg-gray-50 transition-all sm:flex-1"
             >
               <div className="shrink-0">{m.icon}</div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1 sm:flex-none">
                 <p className="text-sm font-semibold text-gray-900">{m.title}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{m.desc}</p>
               </div>
-              <svg xmlns="http://www.w3.org/2000/svg" className="ml-auto shrink-0 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="ml-auto sm:hidden shrink-0 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             </Link>
