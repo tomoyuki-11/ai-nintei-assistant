@@ -76,6 +76,14 @@ export default function FormatForm() {
     return () => { clearRecording() }
   }, [clearRecording])
 
+  // 録音中はプルトゥリフレッシュを無効化
+  useEffect(() => {
+    if (!isRecording) return
+    const prevent = (e: TouchEvent) => e.preventDefault()
+    document.addEventListener('touchmove', prevent, { passive: false })
+    return () => document.removeEventListener('touchmove', prevent)
+  }, [isRecording])
+
   useEffect(() => {
     if (downloadableAudio && !localStorage.getItem('audioDownloadHintDismissed')) {
       setDownloadHintDontShow(false)
