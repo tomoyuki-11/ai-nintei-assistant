@@ -7,7 +7,7 @@ import { Inter } from 'next/font/google'
 const inter = Inter({ subsets: ['latin'], weight: ['700'], variable: '--font-inter' })
 import { downloadExcel } from '@/lib/excel'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
-import { useRecording } from './RecordingContext'
+import { useRecording, getExtFromMime } from './RecordingContext'
 
 type Settings = {
   transcription_save_mode: 'auto' | 'confirm'
@@ -348,12 +348,18 @@ export default function FormatForm() {
       )}
 
       {/* 音声ダウンロードヒントモーダル */}
-      {showDownloadHint && (
+      {showDownloadHint && (() => {
+        const ext = downloadableAudio ? getExtFromMime(downloadableAudio.type) : 'webm'
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
             <p className="text-sm font-semibold text-gray-900 mb-3">録音音声について</p>
-            <p className="text-sm text-gray-600 mb-5">
+            <p className="text-sm text-gray-600 mb-3">
               音声のダウンロードは任意です。文字起こしはすでに完了しています。このページを閉じると音声はダウンロードできなくなります。
+            </p>
+            <p className="text-xs bg-gray-100 rounded-lg px-3 py-2 text-gray-600 mb-4">
+              形式：<span className="font-medium">.{ext}</span>
+              {ext === 'webm' && <span className="block mt-0.5">※ macOS標準では開けません。VLC などのプレーヤーをお使いください。</span>}
             </p>
             <label className="flex items-center gap-2 text-xs text-gray-500 mb-5 cursor-pointer">
               <input
@@ -387,7 +393,8 @@ export default function FormatForm() {
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* AI整形確認モーダル */}
       {showFormatConfirm && (
@@ -541,7 +548,7 @@ export default function FormatForm() {
               disabled={isTranscribing}
               className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
             >
-              音声をダウンロード
+              音声をダウンロード (.{getExtFromMime(downloadableAudio.type)})
             </button>
           )}
           {pendingAudio && (

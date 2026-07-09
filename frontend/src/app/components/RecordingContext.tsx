@@ -49,7 +49,7 @@ function splitChunksIntoGroups(chunks: Blob[], maxBytes: number): Blob[][] {
   return groups
 }
 
-function getExtFromMime(mimeType: string): string {
+export function getExtFromMime(mimeType: string): string {
   if (mimeType.includes('ogg')) return 'ogg'
   if (mimeType.includes('flac')) return 'flac'
   if (mimeType.includes('mp3') || mimeType.includes('mpeg')) return 'mp3'
