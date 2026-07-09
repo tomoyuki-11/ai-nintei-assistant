@@ -216,7 +216,15 @@ export default function HomePage() {
                         onClick={() => setOpenFormattedId(openFormattedId === item.id ? null : item.id)}
                         className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
                       >
-                        <span>{openFormattedId === item.id ? '▲' : '▶'}</span>
+                        {openFormattedId === item.id ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                          </svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        )}
                         整形結果を{openFormattedId === item.id ? '閉じる' : '見る'}
                       </button>
                       <button
