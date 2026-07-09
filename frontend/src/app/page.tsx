@@ -30,18 +30,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [openFormattedId, setOpenFormattedId] = useState<string | null>(null)
-  const [openTextId, setOpenTextId] = useState<string | null>(null)
-  const [confirmingId, setConfirmingId] = useState<string | null>(null)
-  const [formattingId, setFormattingId] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editText, setEditText] = useState('')
-  const [savingId, setSavingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [deletingTextId, setDeletingTextId] = useState<string | null>(null)
-  const [deletingFormattedId, setDeletingFormattedId] = useState<string | null>(null)
   const [paymentSuccess, setPaymentSuccess] = useState<'subscription' | 'credit' | null>(null)
-  const [formatConfirmItem, setFormatConfirmItem] = useState<Transcription | null>(null)
-  const [limitError, setLimitError] = useState('')
   const [splash, setSplash] = useState<'visible' | 'fading' | 'hidden'>('visible')
 
   useEffect(() => {
@@ -90,41 +80,6 @@ export default function HomePage() {
     })
   }, [router])
 
-  function startEditing(item: Transcription) {
-    setEditingId(item.id)
-    setEditText(item.text ?? '')
-    setOpenTextId(null)
-    setConfirmingId(null)
-    setDeletingId(null)
-  }
-
-  function cancelEditing() {
-    setEditingId(null)
-    setEditText('')
-    setDeletingId(null)
-    setDeletingTextId(null)
-    setDeletingFormattedId(null)
-  }
-
-  async function handleSave(id: string) {
-    setSavingId(id)
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ text: editText }),
-      })
-      if (!res.ok) throw new Error(`エラー: ${res.status}`)
-      setHistory((prev) => prev.map((h) => h.id === id ? { ...h, text: editText } : h))
-      setEditingId(null)
-      setEditText('')
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '保存に失敗しました')
-    } finally {
-      setSavingId(null)
-    }
-  }
-
   async function handleDelete(id: string) {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${id}`, {
@@ -133,77 +88,9 @@ export default function HomePage() {
       })
       if (!res.ok) throw new Error(`エラー: ${res.status}`)
       setHistory((prev) => prev.filter((h) => h.id !== id))
-      setEditingId(null)
       setDeletingId(null)
     } catch (e) {
       alert(e instanceof Error ? e.message : '削除に失敗しました')
-    }
-  }
-
-  async function handleDeleteText(id: string) {
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${id}/text`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      })
-      if (!res.ok) throw new Error(`エラー: ${res.status}`)
-      setHistory((prev) => prev.map((h) => h.id === id ? { ...h, text: null } : h))
-      setDeletingTextId(null)
-      setEditingId(null)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '削除に失敗しました')
-    }
-  }
-
-  async function handleDeleteFormatted(id: string) {
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${id}/formatted`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      })
-      if (!res.ok) throw new Error(`エラー: ${res.status}`)
-      setHistory((prev) => prev.map((h) => h.id === id ? { ...h, formatted: null } : h))
-      setDeletingFormattedId(null)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '削除に失敗しました')
-    }
-  }
-
-  async function handleFormat(item: Transcription) {
-    if (!item.text) return
-    setConfirmingId(null)
-    setLimitError('')
-    setFormattingId(item.id)
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/format`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ text: item.text, id: item.id }),
-      })
-      if (res.status === 402) {
-        const msg = await res.text().catch(() => '')
-        setLimitError(msg || '使用回数の上限に達しています。クレジットを購入するか、プランをアップグレードしてください。')
-        return
-      }
-      if (!res.ok) throw new Error(`エラー: ${res.status}`)
-      const data = await res.json()
-      setHistory((prev) =>
-        prev.map((h) => h.id === item.id ? { ...h, formatted: data.formatted } : h)
-      )
-      setOpenFormattedId(item.id)
-      window.dispatchEvent(new Event('planStatusChanged'))
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '整形に失敗しました')
-    } finally {
-      setFormattingId(null)
-    }
-  }
-
-  function onFormatClick(item: Transcription) {
-    if (item.formatted) {
-      setConfirmingId(item.id)
-    } else {
-      setFormatConfirmItem(item)
     }
   }
 
@@ -246,29 +133,6 @@ export default function HomePage() {
         </div>
       </div>
     )}
-    {/* AI整形確認モーダル */}
-    {formatConfirmItem && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-        <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
-          <p className="text-sm font-semibold text-gray-900 mb-2">AI整形を実行しますか？</p>
-          <p className="text-xs text-gray-500 mb-5">入力されたテキストをAIが認定調査票形式に整形します。</p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setFormatConfirmItem(null)}
-              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              キャンセル
-            </button>
-            <button
-              onClick={() => { const item = formatConfirmItem; setFormatConfirmItem(null); handleFormat(item) }}
-              className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors"
-            >
-              実行する
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
     <main className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-4">
         {/* 決済成功バナー */}
@@ -282,17 +146,6 @@ export default function HomePage() {
             <button
               onClick={() => setPaymentSuccess(null)}
               className="text-green-500 hover:text-green-700 text-lg leading-none"
-            >×</button>
-          </div>
-        )}
-
-        {/* 上限エラーバナー */}
-        {limitError && (
-          <div className="mb-4 rounded-xl bg-orange-50 border border-orange-200 px-4 py-3 flex items-center justify-between">
-            <p className="text-sm text-orange-700 font-medium">{limitError}</p>
-            <button
-              onClick={() => setLimitError('')}
-              className="text-orange-500 hover:text-orange-700 text-lg leading-none ml-3 shrink-0"
             >×</button>
           </div>
         )}
@@ -326,7 +179,6 @@ export default function HomePage() {
 
         <div className="space-y-3">
           {history.map((item) => {
-            const isEditing = editingId === item.id
             const isDeleting = deletingId === item.id
 
             return (
@@ -342,37 +194,15 @@ export default function HomePage() {
                       <p className="text-xs text-gray-500 truncate">担当：{item.user_name}</p>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {isEditing ? (
-                      isDeleting ? (
-                        <>
-                          <span className="text-xs text-gray-600">レコードを削除しますか？</span>
-                          <button onClick={() => handleDelete(item.id)} className="rounded px-2.5 py-1 text-xs bg-red-500 text-white hover:bg-red-600 transition-colors">はい</button>
-                          <button onClick={() => setDeletingId(null)} className="rounded px-2.5 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">いいえ</button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => { setDeletingId(item.id); setDeletingFormattedId(null) }} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors">削除</button>
-                          <button onClick={cancelEditing} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 transition-colors">キャンセル</button>
-                        </>
-                      )
-                    ) : (
+                  <div className="flex items-center gap-2">
+                    {deletingId === item.id ? (
                       <>
-                        <button onClick={() => startEditing(item)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 transition-colors">編集</button>
-                        {item.text && (
-                          formattingId === item.id ? (
-                            <span className="text-xs text-blue-500 animate-pulse">整形中...</span>
-                          ) : confirmingId === item.id ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-600">上書きしますか？</span>
-                              <button onClick={() => { setConfirmingId(null); setFormatConfirmItem(item) }} className="rounded px-2.5 py-1 text-xs bg-orange-500 text-white hover:bg-orange-600 transition-colors">はい</button>
-                              <button onClick={() => setConfirmingId(null)} className="rounded px-2.5 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">いいえ</button>
-                            </div>
-                          ) : (
-                            <button onClick={() => onFormatClick(item)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-blue-700 transition-colors">AI整形を実行</button>
-                          )
-                        )}
+                        <span className="text-xs text-gray-600">削除しますか？</span>
+                        <button onClick={() => handleDelete(item.id)} className="rounded px-2.5 py-1 text-xs bg-red-500 text-white hover:bg-red-600 transition-colors">はい</button>
+                        <button onClick={() => setDeletingId(null)} className="rounded px-2.5 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">いいえ</button>
                       </>
+                    ) : (
+                      <button onClick={() => setDeletingId(item.id)} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors">削除</button>
                     )}
                   </div>
                 </div>
@@ -389,29 +219,16 @@ export default function HomePage() {
                         <span>{openFormattedId === item.id ? '▲' : '▶'}</span>
                         整形結果を{openFormattedId === item.id ? '閉じる' : '見る'}
                       </button>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)
-                            fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${item.id}/mark-downloaded`, {
-                              method: 'POST',
-                              headers: authHeaders(),
-                            }).catch(() => {})
-                          }}
-                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-green-700 transition-colors"
-                        >Excelをダウンロード</button>
-                        {isEditing && (
-                          deletingFormattedId === item.id ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-gray-500">整形結果を削除しますか？</span>
-                              <button onClick={() => handleDeleteFormatted(item.id)} className="rounded px-2 py-0.5 text-xs bg-red-500 text-white hover:bg-red-600">はい</button>
-                              <button onClick={() => setDeletingFormattedId(null)} className="rounded px-2 py-0.5 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100">いいえ</button>
-                            </div>
-                          ) : (
-                            <button onClick={() => { setDeletingFormattedId(item.id); setDeletingTextId(null); setDeletingId(null) }} className="text-xs text-red-400 hover:text-red-600 hover:underline transition-colors">整形結果を削除</button>
-                          )
-                        )}
-                      </div>
+                      <button
+                        onClick={() => {
+                          downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)
+                          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${item.id}/mark-downloaded`, {
+                            method: 'POST',
+                            headers: authHeaders(),
+                          }).catch(() => {})
+                        }}
+                        className="rounded-lg bg-green-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-green-700 transition-colors"
+                      >Excelをダウンロード</button>
                     </div>
                     {openFormattedId === item.id && (
                       <div className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
