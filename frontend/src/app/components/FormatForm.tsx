@@ -84,6 +84,17 @@ export default function FormatForm() {
     return () => document.removeEventListener('touchmove', prevent)
   }, [isRecording])
 
+  // 録音中にリロード・タブを閉じようとしたら警告
+  useEffect(() => {
+    if (!isRecording) return
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [isRecording])
+
   useEffect(() => {
     if (downloadableAudio && !localStorage.getItem('audioDownloadHintDismissed')) {
       setDownloadHintDontShow(false)
