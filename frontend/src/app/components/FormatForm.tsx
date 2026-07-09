@@ -21,7 +21,7 @@ type ConfirmState =
 
 export default function FormatForm() {
   const router = useRouter()
-  const { isRecording, isPaused, isTranscribing, text, setText, recordingError, setRecordingError, pendingAudio, startRecording, stopRecording, pauseRecording, resumeRecording, transcribeFile, retryTranscription, clearPendingAudio, clearRecording } = useRecording()
+  const { isRecording, isPaused, isTranscribing, text, setText, recordingError, setRecordingError, pendingAudio, startRecording, stopRecording, pauseRecording, resumeRecording, transcribeFile, retryTranscription, downloadAudio, clearPendingAudio, clearRecording } = useRecording()
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -451,6 +451,15 @@ export default function FormatForm() {
               className="flex items-center gap-1.5 rounded-full border border-orange-300 bg-orange-50 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors"
             >
               録音済み音声を文字起こし
+            </button>
+          )}
+          {pendingAudio && (
+            <button
+              onClick={downloadAudio}
+              disabled={isTranscribing}
+              className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              音声をダウンロード
             </button>
           )}
           {pendingAudio && (

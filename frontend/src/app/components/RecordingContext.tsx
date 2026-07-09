@@ -18,11 +18,35 @@ type RecordingContextType = {
   resumeRecording: () => void
   transcribeFile: (file: File | Blob) => Promise<string>
   retryTranscription: () => Promise<string>
+  downloadAudio: () => void
   clearPendingAudio: () => void
   clearRecording: () => void
 }
 
 const RecordingContext = createContext<RecordingContextType | null>(null)
+
+const MAX_WHISPER_BYTES = 24 * 1024 * 1024  // 25MB上限に対して1MB余裕を持たせる
+
+// Whisperの25MB上限に合わせてチャンク配列をグループ分割する
+// chunks[0]はwebm/m4a両方で初期化セグメント（ヘッダ）を含むため各グループ先頭に付与する
+function splitChunksIntoGroups(chunks: Blob[], maxBytes: number): Blob[][] {
+  if (chunks.length === 0) return []
+  const groups: Blob[][] = []
+  let current: Blob[] = [chunks[0]]
+  let currentSize = chunks[0].size
+  for (let i = 1; i < chunks.length; i++) {
+    if (currentSize + chunks[i].size > maxBytes && current.length > 1) {
+      groups.push(current)
+      current = [chunks[0], chunks[i]]
+      currentSize = chunks[0].size + chunks[i].size
+    } else {
+      current.push(chunks[i])
+      currentSize += chunks[i].size
+    }
+  }
+  if (current.length > 0) groups.push(current)
+  return groups
+}
 
 function getExtFromMime(mimeType: string): string {
   if (mimeType.includes('ogg')) return 'ogg'
@@ -199,26 +223,58 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         setIsPaused(false)
 
         const mimeType = chunksRef.current[0]?.type || 'audio/webm'
-        const blob = new Blob(chunksRef.current, { type: mimeType })
+        const totalSize = chunksRef.current.reduce((sum, c) => sum + c.size, 0)
 
-        let transcribed = await callWhisper(blob)
-        if (transcribed === null) {
-          // ネットワーク回復を待って1回自動リトライ
-          await new Promise((r) => setTimeout(r, 3000))
-          transcribed = await callWhisper(blob)
-        }
-        if (transcribed === null) {
-          // リトライも失敗 → 録音音声を保存して手動リトライを促す
-          setPendingAudio(blob)
-          setRecordingError('文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。')
-          resolve(textRef.current)
-        } else if (transcribed === '') {
-          // 無音またはスリープによる録音不全
-          setRecordingError('音声が検出されませんでした。スリープ中は録音が途切れることがあります。画面をオンのままにしてください。')
-          resolve(textRef.current)
+        if (totalSize <= MAX_WHISPER_BYTES) {
+          const blob = new Blob(chunksRef.current, { type: mimeType })
+          let transcribed = await callWhisper(blob)
+          if (transcribed === null) {
+            await new Promise((r) => setTimeout(r, 3000))
+            transcribed = await callWhisper(blob)
+          }
+          if (transcribed === null) {
+            setPendingAudio(blob)
+            setRecordingError('文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。')
+            resolve(textRef.current)
+          } else if (transcribed === '') {
+            setRecordingError('音声が検出されませんでした。スリープ中は録音が途切れることがあります。画面をオンのままにしてください。')
+            resolve(textRef.current)
+          } else {
+            setPendingAudio(null)
+            resolve(appendTranscription(transcribed))
+          }
         } else {
-          setPendingAudio(null)
-          resolve(appendTranscription(transcribed))
+          // 25MB超：チャンク分割して順次送信
+          const groups = splitChunksIntoGroups(chunksRef.current, MAX_WHISPER_BYTES)
+          const accumulated: string[] = []
+
+          for (const group of groups) {
+            const groupBlob = new Blob(group, { type: mimeType })
+            let result = await callWhisper(groupBlob)
+            if (result === null) {
+              await new Promise((r) => setTimeout(r, 3000))
+              result = await callWhisper(groupBlob)
+            }
+            if (result === null) {
+              // 失敗したグループのみ保存 → リトライ可能（25MB未満）
+              const newText = accumulated.length > 0
+                ? appendTranscription(accumulated.join('\n'))
+                : textRef.current
+              setPendingAudio(groupBlob)
+              setRecordingError('文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。')
+              resolve(newText)
+              return
+            }
+            if (result !== '') accumulated.push(result)
+          }
+
+          if (accumulated.length === 0) {
+            setRecordingError('音声が検出されませんでした。スリープ中は録音が途切れることがあります。画面をオンのままにしてください。')
+            resolve(textRef.current)
+          } else {
+            setPendingAudio(null)
+            resolve(appendTranscription(accumulated.join('\n')))
+          }
         }
       }
 
@@ -257,6 +313,20 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return appendTranscription(transcribed)
   }, [pendingAudio, callWhisper, appendTranscription])
 
+  const downloadAudio = useCallback(() => {
+    if (!pendingAudio) return
+    const ext = getExtFromMime(pendingAudio.type)
+    const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+    const url = URL.createObjectURL(pendingAudio)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `recording_${ts}.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, [pendingAudio])
+
   const clearPendingAudio = useCallback(() => {
     setPendingAudio(null)
   }, [])
@@ -283,6 +353,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       resumeRecording,
       transcribeFile,
       retryTranscription,
+      downloadAudio,
       clearPendingAudio,
       clearRecording,
     }}>
