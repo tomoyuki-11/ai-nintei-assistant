@@ -18,11 +18,16 @@ export default function RecordPage() {
     pendingAudio, downloadableAudio, hasPendingRecovery,
     startRecording, stopRecording, pauseRecording, resumeRecording,
     retryTranscription, recoverAndTranscribe, discardRecovery,
-    downloadAudio, clearPendingAudio, clearRecording,
+    transcribeFile, transcribeBlob, downloadAudio, clearPendingAudio, clearRecording,
   } = useRecording()
+
+  const continuationRef = useRef<Blob | null>(null)
 
   const [result, setResult] = useState('')
   const [isFormatting, setIsFormatting] = useState(false)
+  const [pipelinePending, setPipelinePending] = useState(() =>
+    typeof window !== 'undefined' && !!localStorage.getItem('pipeline_pending')
+  )
   const [error, setError] = useState('')
   const [isIOS, setIsIOS] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -148,10 +153,16 @@ export default function RecordPage() {
       if (!res.ok) throw new Error(`エラー: ${res.status}`)
       const data = await res.json()
       setResult(data.formatted)
+      localStorage.removeItem('pipeline_pending')
+      setPipelinePending(false)
       setText('')
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
-      setError(e instanceof Error ? e.message : '整形に失敗しました')
+      const msg = e instanceof Error ? e.message : ''
+      setError(msg === 'Load failed' || msg === 'Failed to fetch'
+        ? 'ネットワークエラーが発生しました。インターネット接続を確認してください。'
+        : msg || '整形に失敗しました'
+      )
     } finally {
       setIsFormatting(false)
     }
@@ -159,11 +170,28 @@ export default function RecordPage() {
 
   async function handleStopRecording() {
     recordedThisSessionRef.current = true
-    const currentText = await stopRecording()
-    if (!currentText.trim()) return
-    const id = await saveTranscription(currentText)
+    const localCont = continuationRef.current
+    continuationRef.current = null
+
+    const newText = await stopRecording()
+
+    if (localCont) {
+      // 続きから録音：保存済み音声（localCont）を文字起こしして新録音テキストと結合
+      const oldText = await transcribeBlob(localCont)
+      const parts = [oldText.trim(), newText.trim()].filter(Boolean)
+      const combinedText = parts.join('\n')
+      if (!combinedText) return
+      setText(combinedText)
+      const id = await saveTranscription(combinedText)
+      savedIdRef.current = id
+      await formatText(combinedText, id)
+      return
+    }
+
+    if (!newText.trim()) return
+    const id = await saveTranscription(newText)
     savedIdRef.current = id
-    await formatText(currentText, id)
+    await formatText(newText, id)
   }
 
   async function handleRecoverAndFormat() {
@@ -171,6 +199,17 @@ export default function RecordPage() {
     if (!currentText.trim()) return
     const id = await saveTranscription(currentText)
     await formatText(currentText, id)
+  }
+
+  async function handlePipelineRecoverAndFormat() {
+    if (!downloadableAudio) return
+    const text = await transcribeFile(downloadableAudio)
+    if (!text.trim()) return
+    setPipelinePending(false)
+    localStorage.removeItem('pipeline_pending')
+    const id = await saveTranscription(text)
+    savedIdRef.current = id
+    await formatText(text, id)
   }
 
   async function handleRetryFormat() {
@@ -288,17 +327,33 @@ export default function RecordPage() {
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-bold text-gray-900">録音して整形</h1>
-          <Link href="/assess" className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors">← 戻る</Link>
+          {isBusy ? (
+            <span className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium opacity-40 cursor-not-allowed">← 戻る</span>
+          ) : (
+            <Link href="/assess" className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors">← 戻る</Link>
+          )}
         </div>
 
-        {/* リカバリバナー */}
+        {/* リカバリバナー（録音中断） */}
         {hasPendingRecovery && !result && (
           <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-4">
             <p className="text-xs font-medium text-orange-800 mb-1">前回の録音データが見つかりました</p>
-            <p className="text-xs text-orange-700 mb-2">リロード前の録音音声が保存されています。整形しますか？</p>
+            <p className="text-xs text-orange-700 mb-2">リロード前の録音音声が保存されています。どうしますか？</p>
             <div className="flex gap-2">
               <button onClick={handleRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">整形する</button>
-              <button onClick={discardRecovery} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">破棄する</button>
+              <button onClick={startRecording} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
+            </div>
+          </div>
+        )}
+
+        {/* リカバリバナー（文字起こし・整形中断） */}
+        {pipelinePending && !!downloadableAudio && !result && !hasPendingRecovery && !isRecording && (
+          <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-4">
+            <p className="text-xs font-medium text-orange-800 mb-1">処理が途中で中断されました</p>
+            <p className="text-xs text-orange-700 mb-2">文字起こしまたは整形の途中でリロードされました。録音音声は保存されています。どうしますか？</p>
+            <div className="flex gap-2">
+              <button onClick={handlePipelineRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">整形する</button>
+              <button onClick={() => { continuationRef.current = downloadableAudio; setPipelinePending(false); startRecording() }} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
             </div>
           </div>
         )}

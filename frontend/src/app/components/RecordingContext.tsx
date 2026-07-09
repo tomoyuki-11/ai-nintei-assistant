@@ -19,6 +19,7 @@ type RecordingContextType = {
   pauseRecording: () => void
   resumeRecording: () => void
   transcribeFile: (file: File | Blob) => Promise<string>
+  transcribeBlob: (blob: Blob) => Promise<string>
   retryTranscription: () => Promise<string>
   recoverAndTranscribe: () => Promise<string>
   discardRecovery: () => void
@@ -277,6 +278,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
+  const downloadableAudioInitRef = useRef(false)
+  const pendingAudioInitRef = useRef(false)
 
   const textRef = useRef('')
   textRef.current = text
@@ -300,12 +303,14 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   // 起動時にダウンロード可能な音声をIndexedDBから復元する
   useEffect(() => {
     getDownloadableAudio().then(blob => {
+      downloadableAudioInitRef.current = true
       if (blob) setDownloadableAudio(blob)
     })
   }, [])
 
-  // downloadableAudioが変わるたびにIndexedDBへ同期する
+  // downloadableAudioが変わるたびにIndexedDBへ同期する（初回null状態はスキップ）
   useEffect(() => {
+    if (!downloadableAudioInitRef.current) return
     if (downloadableAudio) {
       saveDownloadableAudio(downloadableAudio)
     } else {
@@ -316,12 +321,14 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   // 起動時にpendingAudioをIndexedDBから復元する
   useEffect(() => {
     getPendingAudioFromDB().then(blob => {
+      pendingAudioInitRef.current = true
       if (blob) setPendingAudio(blob)
     })
   }, [])
 
-  // pendingAudioが変わるたびにIndexedDBへ同期する
+  // pendingAudioが変わるたびにIndexedDBへ同期する（初回null状態はスキップ）
   useEffect(() => {
+    if (!pendingAudioInitRef.current) return
     if (pendingAudio) {
       savePendingAudioToDB(pendingAudio)
     } else {
@@ -408,6 +415,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     // 新しい録音開始時に前回のリカバリデータを破棄
     clearRecoveryDB()
     setHasPendingRecovery(false)
+    localStorage.removeItem('pipeline_pending')
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -495,21 +503,28 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
         const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
         const mimeType = chunksRef.current[0]?.type || (isIOS ? 'audio/mp4' : 'audio/webm')
+
+        // 文字起こし開始前に音声をIndexedDBへ保存し、パイプライン中リロード時のリカバリに備える
+        const preSaveBlob = new Blob(chunksRef.current, { type: mimeType })
+        setDownloadableAudio(preSaveBlob)
+        localStorage.setItem('pipeline_pending', '1')
+
         const { result, failedGroupBlob, fullBlob } = await transcribeChunks(
           chunksRef.current, mimeType, callWhisper
         )
 
         if (result === null) {
-          setDownloadableAudio(fullBlob)
           setPendingAudio(failedGroupBlob ?? fullBlob)
+          localStorage.removeItem('pipeline_pending')
           setRecordingError('文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。')
           resolve(textRef.current)
         } else if (result === '') {
+          localStorage.removeItem('pipeline_pending')
           setRecordingError('音声が検出されませんでした。スリープ中は録音が途切れることがあります。画面をオンのままにしてください。')
           resolve(textRef.current)
         } else {
-          setDownloadableAudio(fullBlob)
           setPendingAudio(null)
+          // pipeline_pending は整形完了後に record/page.tsx 側でクリアする
           resolve(appendTranscription(result))
         }
       }
@@ -532,6 +547,12 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
     return appendTranscription(transcribed)
   }, [callWhisper, appendTranscription])
+
+  // 音声 blob を文字起こしして生テキストを返す（text state は変更しない）
+  const transcribeBlob = useCallback(async (blob: Blob): Promise<string> => {
+    const transcribed = await callWhisper(blob)
+    return transcribed ?? ''
+  }, [callWhisper])
 
   // 録音失敗時に保存された音声を再度文字起こし
   const retryTranscription = useCallback(async (): Promise<string> => {
@@ -580,6 +601,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const discardRecovery = useCallback(() => {
     clearRecoveryDB()
     setHasPendingRecovery(false)
+    localStorage.removeItem('pipeline_pending')
   }, [])
 
   const downloadAudio = useCallback(() => {
@@ -587,13 +609,27 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     const ext = getExtFromMime(downloadableAudio.type)
     const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
     const url = URL.createObjectURL(downloadableAudio)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `recording_${ts}.${ext}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+
+    if (isIOS) {
+      // iOS Safari: download属性が非対応のため新タブで開く
+      // 即時revokeするとLoad failedになるため60秒後に解放
+      const a = document.createElement('a')
+      a.href = url
+      a.target = '_blank'
+      a.rel = 'noopener'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    } else {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `recording_${ts}.${ext}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
   }, [downloadableAudio])
 
   const clearPendingAudio = useCallback(() => {
@@ -603,6 +639,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const clearRecording = useCallback(() => {
     setText('')
     localStorage.removeItem(DRAFT_KEY)
+    localStorage.removeItem('pipeline_pending')
     chunksRef.current = []
     setPendingAudio(null)
     setDownloadableAudio(null)
@@ -625,6 +662,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       pauseRecording,
       resumeRecording,
       transcribeFile,
+      transcribeBlob,
       retryTranscription,
       recoverAndTranscribe,
       discardRecovery,

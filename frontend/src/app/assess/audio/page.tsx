@@ -56,7 +56,11 @@ export default function AudioPage() {
       setText('')
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
-      setError(e instanceof Error ? e.message : '整形に失敗しました')
+      const msg = e instanceof Error ? e.message : ''
+      setError(msg === 'Load failed' || msg === 'Failed to fetch'
+        ? 'ネットワークエラーが発生しました。インターネット接続を確認してください。'
+        : msg || '整形に失敗しました'
+      )
     } finally {
       setIsFormatting(false)
     }
@@ -77,7 +81,11 @@ export default function AudioPage() {
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-bold text-gray-900">音声ファイルを整形</h1>
-          <Link href="/assess" className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors">← 戻る</Link>
+          {isBusy ? (
+            <span className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium opacity-40 cursor-not-allowed">← 戻る</span>
+          ) : (
+            <Link href="/assess" className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors">← 戻る</Link>
+          )}
         </div>
 
         {/* エラー */}
