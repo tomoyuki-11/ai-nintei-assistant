@@ -231,7 +231,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     const filename = file instanceof File ? file.name : undefined
     const transcribed = await callWhisper(file, filename)
     if (transcribed === null) {
-      setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
+      setRecordingError('文字起こしに失敗しました。対応形式: m4a / mp3 / mp4 / ogg / wav / flac / webm')
       return textRef.current
     }
     if (transcribed === '') {
