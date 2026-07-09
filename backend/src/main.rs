@@ -394,6 +394,8 @@ async fn transcribe_handler(
         _ => "audio/webm",
     };
 
+    tracing::info!("Whisper送信: filename={}, whisper_mime={}", filename, whisper_mime);
+
     let part = reqwest::multipart::Part::bytes(audio_data)
         .file_name(filename)
         .mime_str(whisper_mime)
