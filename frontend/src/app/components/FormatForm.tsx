@@ -95,6 +95,18 @@ export default function FormatForm() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [isRecording])
 
+  // 録音中はスワイプによる画面遷移を防止
+  useEffect(() => {
+    if (!isRecording) return
+    // ダミー履歴エントリを追加し、スワイプで戻ろうとしたら即座に元の位置に戻す
+    history.pushState(null, '', location.href)
+    const handlePopState = () => {
+      history.pushState(null, '', location.href)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [isRecording])
+
   useEffect(() => {
     if (downloadableAudio && !localStorage.getItem('audioDownloadHintDismissed')) {
       setDownloadHintDontShow(false)
