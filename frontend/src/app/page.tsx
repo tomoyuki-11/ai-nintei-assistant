@@ -133,7 +133,7 @@ export default function HomePage() {
         </div>
       </div>
     )}
-    <main className="flex-1 flex flex-col overflow-hidden bg-gray-50">
+    <main className="flex-1 flex flex-col overflow-hidden min-h-0 bg-gray-50">
 
       {/* 固定エリア：決済バナー＋認定調査開始ボタン */}
       <div className="shrink-0">
@@ -161,7 +161,7 @@ export default function HomePage() {
       </div>
 
       {/* スクロールエリア：調査履歴 */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <div className="max-w-3xl mx-auto px-4 pt-4 pb-4">
           <h2 className="text-sm font-semibold text-gray-500 mb-3">調査履歴</h2>
 
