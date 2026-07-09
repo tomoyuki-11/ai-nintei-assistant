@@ -89,15 +89,6 @@ export default function HamburgerMenu() {
               プラン変更
             </Link>
           )}
-          {(isAdmin || isIndividual) && (
-            <Link
-              href="/settings"
-              onClick={() => setOpen(false)}
-              className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              設定
-            </Link>
-          )}
           <div className="border-t border-gray-100 my-1" />
           <button
             onClick={handleLogout}
