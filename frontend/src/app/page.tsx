@@ -133,121 +133,125 @@ export default function HomePage() {
         </div>
       </div>
     )}
-    <main className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto px-4 py-4">
-        {/* 決済成功バナー */}
+    <main className="flex-1 flex flex-col overflow-hidden bg-gray-50">
+
+      {/* 固定エリア：決済バナー＋認定調査開始ボタン */}
+      <div className="shrink-0">
         {paymentSuccess && (
-          <div className="mb-4 rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between">
-            <p className="text-sm text-green-700 font-medium">
-              {paymentSuccess === 'credit'
-                ? 'クレジットの購入が完了しました！（1回分追加）'
-                : 'スタンダードプランへのアップグレードが完了しました！'}
-            </p>
-            <button
-              onClick={() => setPaymentSuccess(null)}
-              className="text-green-500 hover:text-green-700 text-lg leading-none"
-            >×</button>
+          <div className="px-4 pt-3">
+            <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between mb-0">
+              <p className="text-sm text-green-700 font-medium">
+                {paymentSuccess === 'credit'
+                  ? 'クレジットの購入が完了しました！（1回分追加）'
+                  : 'スタンダードプランへのアップグレードが完了しました！'}
+              </p>
+              <button
+                onClick={() => setPaymentSuccess(null)}
+                className="text-green-500 hover:text-green-700 text-lg leading-none"
+              >×</button>
+            </div>
           </div>
         )}
-
-        {/* 認定調査開始ボタン */}
         <Link
           href="/assess"
-          className="flex items-center justify-center gap-2 w-full rounded-xl bg-blue-600 px-4 py-4 text-base text-white font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors mb-6 shadow-sm"
+          className="flex items-center justify-center gap-2 w-full bg-blue-600 px-4 py-4 text-base text-white font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-sm"
         >
           <span className="text-lg">＋</span> 認定調査を開始
         </Link>
+      </div>
 
-        {/* 調査一覧 */}
-        <h2 className="text-sm font-semibold text-gray-500 mb-3">調査履歴</h2>
+      {/* スクロールエリア：調査履歴 */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-4 pt-4 pb-4">
+          <h2 className="text-sm font-semibold text-gray-500 mb-3">調査履歴</h2>
 
-        {loading && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
+          {loading && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
 
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-700">
+              {error}
+            </div>
+          )}
 
-        {!loading && !error && history.length === 0 && (
-          <div className="text-center py-16 text-gray-400">
-            <p className="text-4xl mb-3">📋</p>
-            <p className="text-sm">調査履歴がありません</p>
-            <p className="text-xs mt-1">「認定調査を開始」から始めてください</p>
-          </div>
-        )}
+          {!loading && !error && history.length === 0 && (
+            <div className="text-center py-16 text-gray-400">
+              <p className="text-4xl mb-3">📋</p>
+              <p className="text-sm">調査履歴がありません</p>
+              <p className="text-xs mt-1">「認定調査を開始」から始めてください</p>
+            </div>
+          )}
 
-        <div className="space-y-3">
-          {history.map((item) => {
-            const isDeleting = deletingId === item.id
+          <div className="space-y-3">
+            {history.map((item) => {
+              const isDeleting = deletingId === item.id
 
-            return (
-              <div
-                key={item.id}
-                className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
-              >
-                {/* ヘッダー */}
-                <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50 gap-2">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <p className="text-xs text-gray-400 shrink-0">{formatDate(item.created_at)}</p>
-                    {item.user_name && (
-                      <p className="text-xs text-gray-500 truncate">担当：{item.user_name}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {deletingId === item.id ? (
-                      <>
-                        <span className="text-xs text-gray-600">削除しますか？</span>
-                        <button onClick={() => handleDelete(item.id)} className="rounded px-2.5 py-1 text-xs bg-red-500 text-white hover:bg-red-600 transition-colors">はい</button>
-                        <button onClick={() => setDeletingId(null)} className="rounded px-2.5 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">いいえ</button>
-                      </>
-                    ) : (
-                      <button onClick={() => setDeletingId(item.id)} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors">削除</button>
-                    )}
-                  </div>
-                </div>
-
-
-                {/* 整形結果 */}
-                {item.formatted && (
-                  <div className="px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <button
-                        onClick={() => setOpenFormattedId(openFormattedId === item.id ? null : item.id)}
-                        className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
-                      >
-                        {openFormattedId === item.id ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                          </svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        )}
-                        整形結果を{openFormattedId === item.id ? '閉じる' : '見る'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)
-                          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${item.id}/mark-downloaded`, {
-                            method: 'POST',
-                            headers: authHeaders(),
-                          }).catch(() => {})
-                        }}
-                        className="rounded-lg bg-green-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-green-700 transition-colors"
-                      >Excelをダウンロード</button>
+              return (
+                <div
+                  key={item.id}
+                  className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+                >
+                  {/* ヘッダー */}
+                  <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50 gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <p className="text-xs text-gray-400 shrink-0">{formatDate(item.created_at)}</p>
+                      {item.user_name && (
+                        <p className="text-xs text-gray-500 truncate">担当：{item.user_name}</p>
+                      )}
                     </div>
-                    {openFormattedId === item.id && (
-                      <div className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
-                        {item.formatted}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {isDeleting ? (
+                        <>
+                          <span className="text-xs text-gray-600">削除しますか？</span>
+                          <button onClick={() => handleDelete(item.id)} className="rounded px-2.5 py-1 text-xs bg-red-500 text-white hover:bg-red-600 transition-colors">はい</button>
+                          <button onClick={() => setDeletingId(null)} className="rounded px-2.5 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">いいえ</button>
+                        </>
+                      ) : (
+                        <button onClick={() => setDeletingId(item.id)} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors">削除</button>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            )
-          })}
+
+                  {/* 整形結果 */}
+                  {item.formatted && (
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={() => setOpenFormattedId(openFormattedId === item.id ? null : item.id)}
+                          className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                          {openFormattedId === item.id ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                            </svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          )}
+                          整形結果を{openFormattedId === item.id ? '閉じる' : '見る'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)
+                            fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${item.id}/mark-downloaded`, {
+                              method: 'POST',
+                              headers: authHeaders(),
+                            }).catch(() => {})
+                          }}
+                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-green-700 transition-colors"
+                        >Excelをダウンロード</button>
+                      </div>
+                      {openFormattedId === item.id && (
+                        <div className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
+                          {item.formatted}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
     </main>
