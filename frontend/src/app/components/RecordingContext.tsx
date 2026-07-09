@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useRef, useState, useCallback } from 'react'
+import { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react'
 import { authHeaders } from '@/lib/auth'
 
 type RecordingContextType = {
@@ -69,11 +69,15 @@ function getMimeFromExt(ext: string): string {
   }
 }
 
+const DRAFT_KEY = 'transcription_draft'
+
 export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const [isRecording, setIsRecording] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
-  const [text, setText] = useState('')
+  const [text, setText] = useState(() =>
+    typeof window !== 'undefined' ? (localStorage.getItem(DRAFT_KEY) ?? '') : ''
+  )
   const [recordingError, setRecordingError] = useState('')
   const [pendingAudio, setPendingAudio] = useState<Blob | null>(null)
   const [downloadableAudio, setDownloadableAudio] = useState<Blob | null>(null)
@@ -83,6 +87,15 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
   const textRef = useRef('')
   textRef.current = text
+
+  // テキストをlocalStorageに随時保存してリロード後も復元できるようにする
+  useEffect(() => {
+    if (text) {
+      localStorage.setItem(DRAFT_KEY, text)
+    } else {
+      localStorage.removeItem(DRAFT_KEY)
+    }
+  }, [text])
 
   // Whisperが無音音声に対して返す既知のハルシネーションパターン
   const HALLUCINATIONS = [
@@ -343,6 +356,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
   const clearRecording = useCallback(() => {
     setText('')
+    localStorage.removeItem(DRAFT_KEY)
     chunksRef.current = []
     setPendingAudio(null)
     setDownloadableAudio(null)
