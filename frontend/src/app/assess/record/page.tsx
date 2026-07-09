@@ -339,9 +339,10 @@ export default function RecordPage() {
           <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-4">
             <p className="text-xs font-medium text-orange-800 mb-1">前回の録音データが見つかりました</p>
             <p className="text-xs text-orange-700 mb-2">リロード前の録音音声が保存されています。どうしますか？</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button onClick={handleRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">整形する</button>
               <button onClick={startRecording} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
+              <button onClick={discardRecovery} disabled={isBusy} className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors">破棄</button>
             </div>
           </div>
         )}
@@ -351,9 +352,10 @@ export default function RecordPage() {
           <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-4">
             <p className="text-xs font-medium text-orange-800 mb-1">処理が途中で中断されました</p>
             <p className="text-xs text-orange-700 mb-2">文字起こしまたは整形の途中でリロードされました。録音音声は保存されています。どうしますか？</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button onClick={handlePipelineRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">整形する</button>
               <button onClick={() => { continuationRef.current = downloadableAudio; setPipelinePending(false); startRecording() }} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
+              <button onClick={() => { setPipelinePending(false); localStorage.removeItem('pipeline_pending'); clearRecording() }} disabled={isBusy} className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors">破棄</button>
             </div>
           </div>
         )}
