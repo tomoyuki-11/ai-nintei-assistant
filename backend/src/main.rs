@@ -377,14 +377,20 @@ async fn transcribe_handler(
     tracing::info!("音声データ: {} bytes, mime: {}", audio_data.len(), mime_type);
 
     let ext = if mime_type.contains("ogg") { "ogg" }
+              else if mime_type.contains("flac") { "flac" }
               else if mime_type.contains("m4a") { "m4a" }
               else if mime_type.contains("mp4") { "mp4" }
+              else if mime_type.contains("mpeg") || mime_type.contains("mp3") { "mp3" }
+              else if mime_type.contains("wav") { "wav" }
               else { "webm" };
     let filename = format!("audio.{}", ext);
 
     let whisper_mime = match ext {
         "ogg" => "audio/ogg",
+        "flac" => "audio/flac",
         "m4a" | "mp4" => "audio/mp4",
+        "mp3" | "mpeg" | "mpga" => "audio/mpeg",
+        "wav" => "audio/wav",
         _ => "audio/webm",
     };
 

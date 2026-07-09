@@ -26,6 +26,7 @@ const RecordingContext = createContext<RecordingContextType | null>(null)
 
 function getExtFromMime(mimeType: string): string {
   if (mimeType.includes('ogg')) return 'ogg'
+  if (mimeType.includes('flac')) return 'flac'
   if (mimeType.includes('mp3') || mimeType.includes('mpeg')) return 'mp3'
   if (mimeType.includes('mp4') || mimeType.includes('m4a')) return 'mp4'
   if (mimeType.includes('wav')) return 'wav'
@@ -35,9 +36,10 @@ function getExtFromMime(mimeType: string): string {
 function getMimeFromExt(ext: string): string {
   switch (ext.toLowerCase()) {
     case 'mp4': case 'm4a': return 'audio/mp4'
-    case 'ogg': return 'audio/ogg'
-    case 'mp3': case 'mpeg': return 'audio/mpeg'
+    case 'ogg': case 'oga': return 'audio/ogg'
+    case 'mp3': case 'mpeg': case 'mpga': return 'audio/mpeg'
     case 'wav': return 'audio/wav'
+    case 'flac': return 'audio/flac'
     default: return 'audio/webm'
   }
 }
