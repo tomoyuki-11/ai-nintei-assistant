@@ -89,7 +89,7 @@ export default function FormatForm() {
     if (!isRecording) return
     const warn = (e: BeforeUnloadEvent) => {
       e.preventDefault()
-      e.returnValue = ''
+      e.returnValue = '録音中です。ページを離れると録音が停止します。'
     }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
