@@ -352,11 +352,8 @@ export default function HomePage() {
                         </>
                       ) : (
                         <>
-                          <button onClick={() => { setDeletingId(item.id); setDeletingTextId(null); setDeletingFormattedId(null) }} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors">削除</button>
+                          <button onClick={() => { setDeletingId(item.id); setDeletingFormattedId(null) }} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors">削除</button>
                           <button onClick={cancelEditing} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 transition-colors">キャンセル</button>
-                          {item.text && (
-                            <button onClick={() => handleSave(item.id)} disabled={savingId === item.id} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">{savingId === item.id ? '保存中...' : '保存'}</button>
-                          )}
                         </>
                       )
                     ) : (
@@ -380,47 +377,6 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* 文字起こし */}
-                {item.text ? (
-                  <div className="px-4 py-3 border-b border-gray-100">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-medium text-gray-400">文字起こし</p>
-                      {isEditing && (
-                        deletingTextId === item.id ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-gray-500">文字起こしを削除しますか？</span>
-                            <button onClick={() => handleDeleteText(item.id)} className="rounded px-2 py-0.5 text-xs bg-red-500 text-white hover:bg-red-600">はい</button>
-                            <button onClick={() => setDeletingTextId(null)} className="rounded px-2 py-0.5 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100">いいえ</button>
-                          </div>
-                        ) : (
-                          <button onClick={() => { setDeletingTextId(item.id); setDeletingFormattedId(null); setDeletingId(null) }} className="text-xs text-red-400 hover:text-red-600 hover:underline transition-colors">文字起こしを削除</button>
-                        )
-                      )}
-                    </div>
-                    {isEditing ? (
-                      <textarea
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        rows={6}
-                        className="w-full rounded-lg border border-blue-400 p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-                      />
-                    ) : (
-                      <p className="text-sm text-gray-900">
-                        {openTextId === item.id ? item.text : item.text.slice(0, 120)}
-                        {item.text.length > 120 && openTextId !== item.id && (
-                          <button onClick={() => setOpenTextId(item.id)} className="ml-1 text-blue-500 hover:underline text-sm">…続きを見る</button>
-                        )}
-                        {openTextId === item.id && (
-                          <button onClick={() => setOpenTextId(null)} className="ml-2 text-xs text-gray-400 hover:underline">閉じる</button>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="px-4 py-3 border-b border-gray-100">
-                    <p className="text-xs text-gray-400">（文字起こしなし）</p>
-                  </div>
-                )}
 
                 {/* 整形結果 */}
                 {item.formatted && (
