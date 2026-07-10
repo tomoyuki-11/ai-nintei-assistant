@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { authHeaders, getTokenPayload } from '@/lib/auth'
 
 export type LimitPlan = {
@@ -36,6 +36,19 @@ type Props = {
 export default function PlanLimitModal({ limitPlan, onClose }: Props) {
   const [isPurchasing, setIsPurchasing] = useState(false)
   const [isUpgrading, setIsUpgrading] = useState(false)
+
+  // iOS bfcache: Stripe で × を押してブラウザバックで戻った際に状態をリセット
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setIsPurchasing(false)
+        setIsUpgrading(false)
+        onClose()
+      }
+    }
+    window.addEventListener('pageshow', handlePageShow)
+    return () => window.removeEventListener('pageshow', handlePageShow)
+  }, [onClose])
 
   if (!limitPlan) return null
 
@@ -108,8 +121,7 @@ export default function PlanLimitModal({ limitPlan, onClose }: Props) {
           )}
           <button
             onClick={onClose}
-            disabled={busy}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
           >
             閉じる
           </button>
