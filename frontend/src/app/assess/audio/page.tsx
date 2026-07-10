@@ -145,11 +145,14 @@ export default function AudioPage() {
     }
   }
 
-  function handleCancelConfirm() {
+  function handleOpenCancelModal() {
     cancelledRef.current = true
     abortControllerRef.current?.abort()
+    setShowCancelModal(true)
+  }
+
+  function handleCancelConfirm() {
     setShowCancelModal(false)
-    setIsFormatting(false)
   }
 
   function handleReset() {
@@ -171,13 +174,10 @@ export default function AudioPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
             <p className="text-sm font-semibold text-gray-900 mb-2">
-              {isTranscribing ? '文字起こし' : '整形'}をキャンセルしますか？
+              {isTranscribing ? '文字起こし' : '整形'}をキャンセルしました
             </p>
-            <p className="text-xs text-gray-500 mb-5">処理中のデータは破棄されます。</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowCancelModal(false)} className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">戻る</button>
-              <button onClick={handleCancelConfirm} className="flex-1 rounded-lg bg-red-500 px-4 py-2 text-sm text-white font-medium hover:bg-red-600 transition-colors">キャンセルする</button>
-            </div>
+            <p className="text-xs text-gray-500 mb-5">もう一度実行する場合はファイルを選択し直してください。</p>
+            <button onClick={handleCancelConfirm} className="w-full rounded-lg bg-gray-700 px-4 py-2 text-sm text-white font-medium hover:bg-gray-800 transition-colors">閉じる</button>
           </div>
         </div>
       )}
@@ -232,7 +232,7 @@ export default function AudioPage() {
             {/* キャンセルボタン（処理中） */}
             {isBusy && (
               <button
-                onClick={() => setShowCancelModal(true)}
+                onClick={handleOpenCancelModal}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
               >
                 キャンセル
