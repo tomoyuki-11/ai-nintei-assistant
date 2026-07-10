@@ -93,8 +93,8 @@ export default function PlanSelectPage() {
               <h2 className="text-base font-bold text-gray-900">従量課金</h2>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-bold text-gray-900">都度</span>
-              <p className="text-xs text-gray-500">購入制</p>
+              <span className="text-2xl font-bold text-gray-900">¥600</span>
+              <span className="text-sm text-gray-500"> / 回</span>
             </div>
           </div>
           <ul className="text-sm text-gray-600 space-y-1 mb-4">
@@ -107,7 +107,7 @@ export default function PlanSelectPage() {
             disabled={loading !== null}
             className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {loading === 'credit' ? '処理中...' : 'クレジットを購入する'}
+            {loading === 'credit' ? '処理中...' : 'クレジットを購入する（¥600/回）'}
           </button>
         </div>
 
@@ -119,12 +119,13 @@ export default function PlanSelectPage() {
               <h2 className="text-base font-bold text-gray-900">月額プラン</h2>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-bold text-gray-900">月額</span>
-              <p className="text-xs text-gray-500">8回/月</p>
+              <span className="text-2xl font-bold text-gray-900">¥2,980</span>
+              <span className="text-sm text-gray-500"> / 月</span>
+              <p className="text-xs text-gray-400 mt-0.5">月8回まで利用可能</p>
             </div>
           </div>
           <ul className="text-sm text-gray-600 space-y-1 mb-4">
-            <li className="flex items-center gap-2"><span className="text-purple-500">✓</span> 月8回まで利用可能</li>
+            <li className="flex items-center gap-2"><span className="text-purple-500">✓</span> 月8回まで利用可能（¥373/回相当）</li>
             <li className="flex items-center gap-2"><span className="text-purple-500">✓</span> 毎月自動更新</li>
             <li className="flex items-center gap-2"><span className="text-purple-500">✓</span> いつでも解約可能</li>
           </ul>
