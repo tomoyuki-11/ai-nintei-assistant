@@ -7,6 +7,67 @@ import { downloadExcel } from '@/lib/excel'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
 import { useRecording } from '../../components/RecordingContext'
 
+// --- IndexedDB: アップロードファイルの永続化 ---
+
+async function openUploadDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('recording_recovery', 2)
+    req.onupgradeneeded = () => {
+      const db = req.result
+      if (!db.objectStoreNames.contains('downloadable_audio')) {
+        db.createObjectStore('downloadable_audio')
+      }
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function saveUploadFile(file: File): Promise<void> {
+  try {
+    const db = await openUploadDB()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('downloadable_audio', 'readwrite')
+      tx.objectStore('downloadable_audio').put({ blob: file, name: file.name, type: file.type }, 'upload_file')
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  } catch {}
+}
+
+async function getUploadFile(): Promise<File | null> {
+  try {
+    const db = await openUploadDB()
+    const data: { blob: Blob; name: string; type: string } | undefined = await new Promise((resolve, reject) => {
+      const tx = db.transaction('downloadable_audio', 'readonly')
+      const req = tx.objectStore('downloadable_audio').get('upload_file')
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+    if (!data) return null
+    return new File([data.blob], data.name, { type: data.type })
+  } catch {
+    return null
+  }
+}
+
+async function clearUploadFile(): Promise<void> {
+  try {
+    const db = await openUploadDB()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('downloadable_audio', 'readwrite')
+      tx.objectStore('downloadable_audio').delete('upload_file')
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  } catch {}
+}
+
+// ---
+
 export default function AudioPage() {
   const router = useRouter()
   const { isTranscribing, setText, transcribeFile, recordingError, setRecordingError } = useRecording()
@@ -21,6 +82,7 @@ export default function AudioPage() {
     if (!isAuthenticated()) { router.push('/start'); return }
     setText('')
     window.scrollTo(0, 0)
+    getUploadFile().then(f => { if (f) setFile(f) })
   }, [router, setText])
 
   useEffect(() => {
@@ -32,6 +94,11 @@ export default function AudioPage() {
     const t = setTimeout(() => setError(''), 8000)
     return () => clearTimeout(t)
   }, [error])
+
+  function handleFileSelect(f: File) {
+    setFile(f)
+    saveUploadFile(f)
+  }
 
   async function handleSubmit() {
     if (!file) return
@@ -54,6 +121,7 @@ export default function AudioPage() {
       if (!res.ok) throw new Error(`エラー: ${res.status}`)
       const data = await res.json()
       setResult(data.formatted)
+      clearUploadFile()
       setText('')
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
@@ -72,6 +140,7 @@ export default function AudioPage() {
     setResult('')
     setError('')
     setText('')
+    clearUploadFile()
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -134,7 +203,7 @@ export default function AudioPage() {
                   type="file"
                   accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg,.flac"
                   className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f) }}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f) }}
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
