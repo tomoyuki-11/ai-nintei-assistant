@@ -416,6 +416,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     clearRecoveryDB()
     setHasPendingRecovery(false)
     localStorage.removeItem('pipeline_pending')
+    localStorage.removeItem('pipeline_text')
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -640,6 +641,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     setText('')
     localStorage.removeItem(DRAFT_KEY)
     localStorage.removeItem('pipeline_pending')
+    localStorage.removeItem('pipeline_text')
     chunksRef.current = []
     setPendingAudio(null)
     setDownloadableAudio(null)

@@ -155,6 +155,7 @@ export default function RecordPage() {
       const data = await res.json()
       setResult(data.formatted)
       localStorage.removeItem('pipeline_pending')
+      localStorage.removeItem('pipeline_text')
       setPipelinePending(false)
       setText('')
       window.dispatchEvent(new Event('planStatusChanged'))
@@ -183,6 +184,7 @@ export default function RecordPage() {
       const combinedText = parts.join('\n')
       if (!combinedText) return
       setText(combinedText)
+      localStorage.setItem('pipeline_text', combinedText)
       const id = await saveTranscription(combinedText)
       savedIdRef.current = id
       await formatText(combinedText, id)
@@ -190,6 +192,7 @@ export default function RecordPage() {
     }
 
     if (!newText.trim()) return
+    localStorage.setItem('pipeline_text', newText)
     const id = await saveTranscription(newText)
     savedIdRef.current = id
     await formatText(newText, id)
@@ -204,10 +207,13 @@ export default function RecordPage() {
 
   async function handlePipelineRecoverAndFormat() {
     if (!downloadableAudio) return
-    const text = await transcribeFile(downloadableAudio)
+    // 整形中断の場合は保存済みの文字起こしテキストを再利用（再API呼び出し不要）
+    const savedText = localStorage.getItem('pipeline_text') || ''
+    const text = savedText || await transcribeFile(downloadableAudio)
     if (!text.trim()) return
     setPipelinePending(false)
     localStorage.removeItem('pipeline_pending')
+    localStorage.removeItem('pipeline_text')
     const id = await saveTranscription(text)
     savedIdRef.current = id
     await formatText(text, id)
@@ -356,7 +362,7 @@ export default function RecordPage() {
             <div className="flex gap-2 flex-wrap">
               <button onClick={handlePipelineRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">整形する</button>
               <button onClick={() => { continuationRef.current = downloadableAudio; setPipelinePending(false); startRecording() }} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
-              <button onClick={() => { setPipelinePending(false); localStorage.removeItem('pipeline_pending'); clearRecording() }} disabled={isBusy} className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors">破棄</button>
+              <button onClick={() => { setPipelinePending(false); localStorage.removeItem('pipeline_pending'); localStorage.removeItem('pipeline_text'); clearRecording() }} disabled={isBusy} className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors">破棄</button>
             </div>
           </div>
         )}
