@@ -46,25 +46,41 @@ export default function HomePage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
-      if (params.get('checkout') === 'success') {
-        setPaymentSuccess('subscription')
+      const checkoutType = params.get('checkout')
+      if (checkoutType === 'success' || checkoutType === 'credit') {
         window.history.replaceState({}, '', '/')
-        const timers = [2000, 5000, 10000].map((ms) =>
-          setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
-        )
-        const hideTimer = setTimeout(() => setPaymentSuccess(null), 8000)
-        return () => { timers.forEach(clearTimeout); clearTimeout(hideTimer) }
-      } else if (params.get('checkout') === 'credit') {
-        setPaymentSuccess('credit')
-        window.history.replaceState({}, '', '/')
-        const timers = [2000, 5000].map((ms) =>
-          setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
-        )
-        const hideTimer = setTimeout(() => setPaymentSuccess(null), 8000)
-        return () => { timers.forEach(clearTimeout); clearTimeout(hideTimer) }
+
+        // 元いたページへ戻る（PlanLimitModalから遷移した場合）
+        const returnPath = localStorage.getItem('stripe_return_path')
+        localStorage.removeItem('stripe_return_path')
+        if (returnPath && returnPath !== '/') {
+          // PlanBannerを更新してから元のページへ
+          const timers = [500, 2000, 5000].map((ms) =>
+            setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
+          )
+          router.replace(returnPath)
+          return () => timers.forEach(clearTimeout)
+        }
+
+        // 元ページなし → ホームでバナー表示（既存の動作）
+        if (checkoutType === 'success') {
+          setPaymentSuccess('subscription')
+          const timers = [2000, 5000, 10000].map((ms) =>
+            setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
+          )
+          const hideTimer = setTimeout(() => setPaymentSuccess(null), 8000)
+          return () => { timers.forEach(clearTimeout); clearTimeout(hideTimer) }
+        } else {
+          setPaymentSuccess('credit')
+          const timers = [2000, 5000].map((ms) =>
+            setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
+          )
+          const hideTimer = setTimeout(() => setPaymentSuccess(null), 8000)
+          return () => { timers.forEach(clearTimeout); clearTimeout(hideTimer) }
+        }
       }
     }
-  }, [])
+  }, [router])
 
   useEffect(() => {
     if (!isAuthenticated()) {

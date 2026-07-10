@@ -49,6 +49,7 @@ export default function PlanLimitModal({ limitPlan, onClose }: Props) {
     : 'クレジットが不足しています。クレジットを購入してください。'
 
   async function handleCreditPurchase() {
+    localStorage.setItem('stripe_return_path', window.location.pathname)
     setIsPurchasing(true)
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-credit-checkout`, {
@@ -57,12 +58,14 @@ export default function PlanLimitModal({ limitPlan, onClose }: Props) {
       if (!res.ok) throw new Error()
       window.location.href = (await res.json()).url
     } catch {
+      localStorage.removeItem('stripe_return_path')
       alert('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
       setIsPurchasing(false)
     }
   }
 
   async function handleUpgrade() {
+    localStorage.setItem('stripe_return_path', window.location.pathname)
     setIsUpgrading(true)
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-checkout-session`, {
@@ -71,6 +74,7 @@ export default function PlanLimitModal({ limitPlan, onClose }: Props) {
       if (!res.ok) throw new Error()
       window.location.href = (await res.json()).url
     } catch {
+      localStorage.removeItem('stripe_return_path')
       alert('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
       setIsUpgrading(false)
     }
