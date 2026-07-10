@@ -8,24 +8,20 @@ import { authHeaders, isAuthenticated } from '@/lib/auth'
 
 export default function TextPage() {
   const router = useRouter()
-  const [text, setText] = useState(() =>
-    typeof window !== 'undefined' ? localStorage.getItem('text_draft') ?? '' : ''
-  )
+  const [text, setText] = useState('')
   const [isFormatting, setIsFormatting] = useState(false)
   const [result, setResult] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!isAuthenticated()) router.push('/start')
+    const saved = localStorage.getItem('text_draft')
+    if (saved) setText(saved)
     window.scrollTo(0, 0)
   }, [router])
 
   useEffect(() => {
-    if (text) {
-      localStorage.setItem('text_draft', text)
-    } else {
-      localStorage.removeItem('text_draft')
-    }
+    if (text) localStorage.setItem('text_draft', text)
   }, [text])
 
   useEffect(() => {
