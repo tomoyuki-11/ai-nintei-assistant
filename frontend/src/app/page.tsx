@@ -183,7 +183,7 @@ export default function HomePage() {
 
       {/* 認定調査を開始ボタン（AppHeader直下にスティッキー固定） */}
       <div
-        className="sticky z-20 bg-blue-600 shadow-sm"
+        className="sticky bg-blue-600 shadow-sm"
         style={{ top: headerHeight }}
       >
         <Link
