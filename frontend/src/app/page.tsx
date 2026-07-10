@@ -56,14 +56,11 @@ export default function HomePage() {
         const returnPath = localStorage.getItem('stripe_return_path')
         localStorage.removeItem('stripe_return_path')
         if (returnPath && returnPath !== '/') {
-          // 戻り先ページでバナーを表示するためフラグをセット
-          localStorage.setItem('stripe_payment_type', checkoutType === 'success' ? 'subscription' : 'credit')
-          // PlanBannerを更新してから元のページへ
-          const timers = [500, 2000, 5000].map((ms) =>
-            setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
-          )
+          // 戻り先ページでバナーを表示するためsessionStorageにpath付きで保存
+          const paymentType = checkoutType === 'success' ? 'subscription' : 'credit'
+          sessionStorage.setItem('payment_banner', JSON.stringify({ type: paymentType, path: returnPath }))
           router.replace(returnPath)
-          return () => timers.forEach(clearTimeout)
+          return
         }
 
         // 元ページなし → ホームでバナー表示（既存の動作）

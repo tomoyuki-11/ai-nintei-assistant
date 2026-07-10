@@ -1,27 +1,48 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 
 export default function PaymentSuccessBanner() {
   const [type, setType] = useState<'subscription' | 'credit' | null>(null)
   const pathname = usePathname()
+  const bannerPageRef = useRef<string | null>(null)
 
   useEffect(() => {
+    // ホームは独自のバナーがあるため表示しない
     if (pathname === '/') {
-      // ホームページは独自のバナーを持つためここでは表示しない
-      localStorage.removeItem('stripe_payment_type')
       setType(null)
+      bannerPageRef.current = null
       return
     }
-    const stored = localStorage.getItem('stripe_payment_type')
-    if (stored === 'subscription' || stored === 'credit') {
-      localStorage.removeItem('stripe_payment_type')
-      setType(stored)
-      const t = setTimeout(() => setType(null), 8000)
-      return () => clearTimeout(t)
-    } else {
+
+    // sessionStorageから取得し、現在のパスと一致する場合のみ表示
+    const stored = sessionStorage.getItem('payment_banner')
+    if (stored) {
+      try {
+        const { type: t, path } = JSON.parse(stored) as { type: string; path: string }
+        if (path === pathname && (t === 'credit' || t === 'subscription')) {
+          sessionStorage.removeItem('payment_banner')
+          bannerPageRef.current = pathname
+          setType(t as 'credit' | 'subscription')
+          // PlanBannerを更新
+          window.dispatchEvent(new Event('planStatusChanged'))
+          const retryTimers = [2000, 5000].map((ms) =>
+            setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
+          )
+          const hideTimer = setTimeout(() => setType(null), 8000)
+          return () => {
+            clearTimeout(hideTimer)
+            retryTimers.forEach(clearTimeout)
+          }
+        }
+      } catch {}
+    }
+
+    // 別ページへ遷移したらバナーをリセット
+    if (pathname !== bannerPageRef.current) {
       setType(null)
+      bannerPageRef.current = null
     }
   }, [pathname])
 
