@@ -166,7 +166,7 @@ export default function HomePage() {
 
       {/* 決済バナー（スクロールで消える） */}
       {paymentSuccess && (
-        <div className="px-4 pt-3">
+        <div className="px-4 pt-3 pb-3">
           <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between">
             <p className="text-sm text-green-700 font-medium">
               {paymentSuccess === 'credit'

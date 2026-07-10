@@ -7,8 +7,13 @@ export default function PaymentSuccessBanner() {
   const [type, setType] = useState<'subscription' | 'credit' | null>(null)
   const pathname = usePathname()
 
-  // pathnameが変わるたびにlocalStorageをチェック（クライアントサイドナビゲーション対応）
   useEffect(() => {
+    if (pathname === '/') {
+      // ホームページは独自のバナーを持つためここでは表示しない
+      localStorage.removeItem('stripe_payment_type')
+      setType(null)
+      return
+    }
     const stored = localStorage.getItem('stripe_payment_type')
     if (stored === 'subscription' || stored === 'credit') {
       localStorage.removeItem('stripe_payment_type')
@@ -16,7 +21,6 @@ export default function PaymentSuccessBanner() {
       const t = setTimeout(() => setType(null), 8000)
       return () => clearTimeout(t)
     } else {
-      // ページ遷移時はバナーを消す
       setType(null)
     }
   }, [pathname])
