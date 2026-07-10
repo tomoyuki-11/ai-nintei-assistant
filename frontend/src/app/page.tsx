@@ -147,8 +147,8 @@ export default function HomePage() {
       {/* 固定エリア：決済バナー＋認定調査開始ボタン */}
       <div className="shrink-0">
         {paymentSuccess && (
-          <div className="px-4 pt-3">
-            <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between mb-0">
+          <div className="px-4 py-3">
+            <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between">
               <p className="text-sm text-green-700 font-medium">
                 {paymentSuccess === 'credit'
                   ? 'クレジットの購入が完了しました！（1回分追加）'
