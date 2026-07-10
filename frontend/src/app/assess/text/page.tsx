@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { downloadExcel } from '@/lib/excel'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
+import PlanLimitModal, { checkPlanLimit, LimitPlan } from '../../components/PlanLimitModal'
 
 export default function TextPage() {
   const router = useRouter()
@@ -13,6 +14,7 @@ export default function TextPage() {
   const [result, setResult] = useState('')
   const [error, setError] = useState('')
   const [showCancelModal, setShowCancelModal] = useState(false)
+  const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -34,6 +36,8 @@ export default function TextPage() {
 
   async function handleFormat() {
     if (!text.trim()) return
+    const blocked = await checkPlanLimit()
+    if (blocked) { setLimitPlan(blocked); return }
     setIsFormatting(true)
     setError('')
     const controller = new AbortController()
@@ -91,6 +95,9 @@ export default function TextPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
+
+      {/* 使用回数上限モーダル */}
+      <PlanLimitModal limitPlan={limitPlan} onClose={() => setLimitPlan(null)} />
 
       {/* キャンセル確認モーダル */}
       {showCancelModal && (

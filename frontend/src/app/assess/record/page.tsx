@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Inter } from 'next/font/google'
 import { downloadExcel } from '@/lib/excel'
-import { authHeaders, isAuthenticated, getTokenPayload } from '@/lib/auth'
+import { authHeaders, isAuthenticated } from '@/lib/auth'
 import { useRecording, getExtFromMime } from '../../components/RecordingContext'
+import PlanLimitModal, { checkPlanLimit, LimitPlan } from '../../components/PlanLimitModal'
 
 const inter = Inter({ subsets: ['latin'], weight: ['700'], variable: '--font-inter' })
 
@@ -37,10 +38,7 @@ export default function RecordPage() {
   const [autoLockDontShow, setAutoLockDontShow] = useState(false)
   const [showDownloadHint, setShowDownloadHint] = useState(false)
   const [downloadHintDontShow, setDownloadHintDontShow] = useState(false)
-  const [showLimitModal, setShowLimitModal] = useState(false)
-  const [limitPlan, setLimitPlan] = useState<{ plan: string; is_expired: boolean; monthly_limit: number | null } | null>(null)
-  const [isPurchasing, setIsPurchasing] = useState(false)
-  const [isUpgrading, setIsUpgrading] = useState(false)
+  const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
   const savedIdRef = useRef<string | null>(null)
   const recordedThisSessionRef = useRef(false)
 
@@ -123,58 +121,13 @@ export default function RecordPage() {
   )
 
   async function handleStartRecordingClick() {
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/plan-status`, {
-        headers: authHeaders(),
-      })
-      if (res.ok) {
-        const s = await res.json()
-        const credits = s.credits ?? 0
-        const blocked =
-          s.is_expired ||
-          (s.plan === 'trial' && s.is_limit_reached) ||
-          (s.plan === 'monthly' && s.is_limit_reached && credits <= 0) ||
-          (s.plan === 'metered' && credits <= 0)
-        if (blocked) {
-          setLimitPlan(s)
-          setShowLimitModal(true)
-          return
-        }
-      }
-    } catch {}
+    const blocked = await checkPlanLimit()
+    if (blocked) { setLimitPlan(blocked); return }
     if (isIOS && !localStorage.getItem('autoLockConfirmed')) {
       setShowAutoLockModal(true)
       return
     }
     startRecording()
-  }
-
-  async function handleUpgradeClick() {
-    setIsUpgrading(true)
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-checkout-session`, {
-        method: 'POST', headers: authHeaders(),
-      })
-      if (!res.ok) throw new Error()
-      window.location.href = (await res.json()).url
-    } catch {
-      alert('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
-      setIsUpgrading(false)
-    }
-  }
-
-  async function handleCreditPurchaseClick() {
-    setIsPurchasing(true)
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-credit-checkout`, {
-        method: 'POST', headers: authHeaders(),
-      })
-      if (!res.ok) throw new Error()
-      window.location.href = (await res.json()).url
-    } catch {
-      alert('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
-      setIsPurchasing(false)
-    }
   }
 
   async function saveTranscription(text: string): Promise<string | null> {
@@ -357,51 +310,7 @@ export default function RecordPage() {
       )}
 
       {/* 使用回数上限モーダル */}
-      {showLimitModal && limitPlan && (() => {
-        const isIndividual = getTokenPayload()?.role === 'individual'
-        const showUpgrade = isIndividual && (limitPlan.is_expired || limitPlan.plan === 'trial')
-        const showCredit = isIndividual
-        const message = limitPlan.is_expired
-          ? 'トライアル期間が終了しました。プランを選択してください。'
-          : limitPlan.plan === 'trial'
-          ? `今月の使用回数の上限（${limitPlan.monthly_limit}回）に達しました。プランをアップグレードすると続けて利用できます。`
-          : 'クレジットが不足しています。クレジットを購入してください。'
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
-              <p className="text-sm font-semibold text-gray-900 mb-3">録音できません</p>
-              <p className="text-sm text-gray-600 mb-5">{message}</p>
-              <div className="flex flex-col gap-2">
-                {showCredit && (
-                  <button
-                    onClick={handleCreditPurchaseClick}
-                    disabled={isPurchasing || isUpgrading}
-                    className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    {isPurchasing ? '処理中...' : 'クレジットを購入（1回分）'}
-                  </button>
-                )}
-                {showUpgrade && (
-                  <button
-                    onClick={handleUpgradeClick}
-                    disabled={isPurchasing || isUpgrading}
-                    className="w-full rounded-lg bg-purple-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                  >
-                    {isUpgrading ? '処理中...' : '月額プランに申し込む'}
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowLimitModal(false)}
-                  disabled={isPurchasing || isUpgrading}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                >
-                  閉じる
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
+      <PlanLimitModal limitPlan={limitPlan} onClose={() => setLimitPlan(null)} />
 
       {/* iOS 自動ロック確認モーダル */}
       {showAutoLockModal && (

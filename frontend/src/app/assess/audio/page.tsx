@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { downloadExcel } from '@/lib/excel'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
 import { useRecording } from '../../components/RecordingContext'
+import PlanLimitModal, { checkPlanLimit, LimitPlan } from '../../components/PlanLimitModal'
 
 // --- IndexedDB: アップロードファイルの永続化 ---
 
@@ -77,6 +78,7 @@ export default function AudioPage() {
   const [result, setResult] = useState('')
   const [error, setError] = useState('')
   const [showCancelModal, setShowCancelModal] = useState(false)
+  const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const cancelledRef = useRef(false)
@@ -105,6 +107,8 @@ export default function AudioPage() {
 
   async function handleSubmit() {
     if (!file) return
+    const blocked = await checkPlanLimit()
+    if (blocked) { setLimitPlan(blocked); return }
     setError('')
     cancelledRef.current = false
 
@@ -174,6 +178,9 @@ export default function AudioPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
+
+      {/* 使用回数上限モーダル */}
+      <PlanLimitModal limitPlan={limitPlan} onClose={() => setLimitPlan(null)} />
 
       {/* キャンセル確認モーダル */}
       {showCancelModal && (
