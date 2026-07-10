@@ -46,6 +46,7 @@ export default function PlanBanner() {
   }, [])
 
   async function handleUpgrade() {
+    localStorage.setItem('stripe_return_path', window.location.pathname)
     setUpgrading(true)
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-checkout-session`, {
@@ -56,12 +57,14 @@ export default function PlanBanner() {
       const data = await res.json()
       window.location.href = data.url
     } catch {
+      localStorage.removeItem('stripe_return_path')
       alert('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
       setUpgrading(false)
     }
   }
 
   async function handleCreditPurchase() {
+    localStorage.setItem('stripe_return_path', window.location.pathname)
     setPurchasing(true)
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-credit-checkout`, {
@@ -72,6 +75,7 @@ export default function PlanBanner() {
       const data = await res.json()
       window.location.href = data.url
     } catch {
+      localStorage.removeItem('stripe_return_path')
       alert('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
       setPurchasing(false)
     }
