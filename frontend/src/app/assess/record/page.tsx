@@ -280,6 +280,25 @@ export default function RecordPage() {
         </div>
       )}
 
+      {/* 文字起こし・整形中オーバーレイ */}
+      {isBusy && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl px-8 py-8 mx-6 max-w-xs w-full flex flex-col items-center gap-5">
+            <div className="w-12 h-12 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin" />
+            <div className="text-center">
+              <p className="text-base font-semibold text-gray-900">
+                AI {isTranscribing ? '文字起こし' : '整形'}中です
+              </p>
+              <p className="text-xs text-gray-400 mt-1">しばらくお待ちください...</p>
+            </div>
+            <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-center">
+              <p className="text-xs font-semibold text-amber-800">リロードはしないでください</p>
+              <p className="text-xs text-amber-600 mt-0.5">データが失われる可能性があります</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* iOS 自動ロック確認モーダル */}
       {showAutoLockModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
