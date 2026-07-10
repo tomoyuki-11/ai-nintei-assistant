@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { downloadExcel } from '@/lib/excel'
@@ -12,6 +12,8 @@ export default function TextPage() {
   const [isFormatting, setIsFormatting] = useState(false)
   const [result, setResult] = useState('')
   const [error, setError] = useState('')
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (!isAuthenticated()) router.push('/start')
@@ -34,11 +36,14 @@ export default function TextPage() {
     if (!text.trim()) return
     setIsFormatting(true)
     setError('')
+    const controller = new AbortController()
+    abortControllerRef.current = controller
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/format`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ text, save: true, save_text: true }),
+        signal: controller.signal,
       })
       if (res.status === 402) {
         setError(await res.text().catch(() => '') || '使用回数の上限に達しています。クレジットを購入するか、プランをアップグレードしてください。')
@@ -50,6 +55,7 @@ export default function TextPage() {
       localStorage.removeItem('text_draft')
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return
       const msg = e instanceof Error ? e.message : ''
       setError(msg === 'Load failed' || msg === 'Failed to fetch'
         ? 'ネットワークエラーが発生しました。インターネット接続を確認してください。'
@@ -57,7 +63,14 @@ export default function TextPage() {
       )
     } finally {
       setIsFormatting(false)
+      abortControllerRef.current = null
     }
+  }
+
+  function handleCancelConfirm() {
+    abortControllerRef.current?.abort()
+    setShowCancelModal(false)
+    setIsFormatting(false)
   }
 
   function handleReset() {
@@ -69,6 +82,21 @@ export default function TextPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
+
+      {/* キャンセル確認モーダル */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
+            <p className="text-sm font-semibold text-gray-900 mb-2">整形をキャンセルしますか？</p>
+            <p className="text-xs text-gray-500 mb-5">処理中のデータは破棄されます。</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowCancelModal(false)} className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">戻る</button>
+              <button onClick={handleCancelConfirm} className="flex-1 rounded-lg bg-red-500 px-4 py-2 text-sm text-white font-medium hover:bg-red-600 transition-colors">キャンセルする</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-bold text-gray-900">テキストを貼り付けて整形</h1>
@@ -125,6 +153,14 @@ export default function TextPage() {
                   </span>
                 ) : 'AI整形を実行'}
               </button>
+              {isFormatting && (
+                <button
+                  onClick={() => setShowCancelModal(true)}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  キャンセル
+                </button>
+              )}
             </div>
           </div>
         )}
