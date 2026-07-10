@@ -33,14 +33,16 @@ export default function HomePage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [paymentSuccess, setPaymentSuccess] = useState<'subscription' | 'credit' | null>(null)
   const [splash, setSplash] = useState<'visible' | 'fading' | 'hidden'>('visible')
+  const [headerHeight, setHeaderHeight] = useState(61)
 
   useEffect(() => {
-    document.body.style.height = '100%'
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.height = ''
-      document.body.style.overflow = ''
-    }
+    const header = document.querySelector('header')
+    if (!header) return
+    const update = () => setHeaderHeight(header.getBoundingClientRect().height)
+    update()
+    const obs = new ResizeObserver(update)
+    obs.observe(header)
+    return () => obs.disconnect()
   }, [])
 
   useEffect(() => {
@@ -160,36 +162,40 @@ export default function HomePage() {
         </div>
       </div>
     )}
-    <main className="flex-1 flex flex-col overflow-hidden min-h-0 bg-gray-50">
+    <main className="flex-1 bg-gray-50">
 
-      {/* 固定エリア：決済バナー＋認定調査開始ボタン */}
-      <div className="shrink-0">
-        {paymentSuccess && (
-          <div className="px-4 py-3">
-            <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between">
-              <p className="text-sm text-green-700 font-medium">
-                {paymentSuccess === 'credit'
-                  ? 'クレジットの購入が完了しました！（1回分追加）'
-                  : 'スタンダードプランへのアップグレードが完了しました！'}
-              </p>
-              <button
-                onClick={() => setPaymentSuccess(null)}
-                className="text-green-500 hover:text-green-700 text-lg leading-none"
-              >×</button>
-            </div>
+      {/* 決済バナー（スクロールで消える） */}
+      {paymentSuccess && (
+        <div className="px-4 pt-3">
+          <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between">
+            <p className="text-sm text-green-700 font-medium">
+              {paymentSuccess === 'credit'
+                ? 'クレジットの購入が完了しました！（1回分追加）'
+                : 'スタンダードプランへのアップグレードが完了しました！'}
+            </p>
+            <button
+              onClick={() => setPaymentSuccess(null)}
+              className="text-green-500 hover:text-green-700 text-lg leading-none"
+            >×</button>
           </div>
-        )}
+        </div>
+      )}
+
+      {/* 認定調査を開始ボタン（AppHeader直下にスティッキー固定） */}
+      <div
+        className="sticky z-20 bg-blue-600 shadow-sm"
+        style={{ top: headerHeight }}
+      >
         <Link
           href="/assess"
-          className="flex items-center justify-center gap-2 w-full bg-blue-600 px-4 py-4 text-base text-white font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-sm"
+          className="flex items-center justify-center gap-2 w-full px-4 py-4 text-base text-white font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors"
         >
           <span className="text-lg">＋</span> 認定調査を開始
         </Link>
       </div>
 
-      {/* スクロールエリア：調査履歴 */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="max-w-3xl mx-auto px-4 pt-4 pb-4">
+      {/* 調査履歴 */}
+      <div className="max-w-3xl mx-auto px-4 pt-4 pb-4">
           <h2 className="text-sm font-semibold text-gray-500 mb-3">調査履歴</h2>
 
           {loading && <p className="text-sm text-gray-400 text-center py-8">読み込み中...</p>}
@@ -280,7 +286,6 @@ export default function HomePage() {
             })}
           </div>
         </div>
-      </div>
     </main>
     </>
   )
