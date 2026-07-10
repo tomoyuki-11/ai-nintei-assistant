@@ -87,11 +87,11 @@ export default function RecordPage() {
   }, [isRecording])
 
   useEffect(() => {
-    if (downloadableAudio && recordedThisSessionRef.current && !localStorage.getItem('audioDownloadHintDismissed')) {
+    if (result && downloadableAudio && recordedThisSessionRef.current && !localStorage.getItem('audioDownloadHintDismissed')) {
       setDownloadHintDontShow(false)
       setShowDownloadHint(true)
     }
-  }, [downloadableAudio])
+  }, [result])
 
   useEffect(() => {
     if (recordingError) { setError(recordingError); setRecordingError('') }
@@ -329,8 +329,8 @@ export default function RecordPage() {
       {showDownloadHint && downloadableAudio && (() => {
         const ext = getExtFromMime(downloadableAudio.type)
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
+          <div className="fixed inset-x-4 bottom-8 z-50 flex justify-center">
+            <div className="bg-white rounded-xl shadow-2xl p-6 w-80">
               <p className="text-sm font-semibold text-gray-900 mb-3">録音音声について</p>
               <p className="text-sm text-gray-600 mb-3">音声のダウンロードは任意です。整形はすでに完了しています。このページを閉じると音声はダウンロードできなくなります。</p>
               <p className="text-xs bg-gray-100 rounded-lg px-3 py-2 text-gray-600 mb-4">
