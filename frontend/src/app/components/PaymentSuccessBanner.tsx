@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 export default function PaymentSuccessBanner() {
   const [type, setType] = useState<'subscription' | 'credit' | null>(null)
+  const pathname = usePathname()
 
+  // pathnameが変わるたびにlocalStorageをチェック（クライアントサイドナビゲーション対応）
   useEffect(() => {
     const stored = localStorage.getItem('stripe_payment_type')
     if (stored === 'subscription' || stored === 'credit') {
@@ -13,7 +16,7 @@ export default function PaymentSuccessBanner() {
       const t = setTimeout(() => setType(null), 8000)
       return () => clearTimeout(t)
     }
-  }, [])
+  }, [pathname])
 
   if (!type) return null
 
