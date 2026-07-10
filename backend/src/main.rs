@@ -797,7 +797,7 @@ async fn plan_status_handler(
     };
     let is_limit_reached = monthly_limit.map(|limit| monthly_usage >= limit).unwrap_or(false);
 
-    let credits = if org.plan == "metered" || org.plan == "monthly" {
+    let credits = if org.plan == "metered" || org.plan == "monthly" || org.plan == "trial" {
         Some(
             db::get_org_credits(&state.db, org.id)
                 .await
@@ -931,7 +931,7 @@ async fn save_result_handler(
             _ => None,
         };
         if let Some(limit) = plan_limit {
-            if o.plan == "monthly" {
+            if o.plan == "monthly" || o.plan == "trial" {
                 let usage = db::get_monthly_usage(&state.db, o.id, &year_month)
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -1016,20 +1016,17 @@ async fn format_handler(
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             if usage >= limit {
-                if o.plan == "monthly" {
-                    let credits = db::get_org_credits(&state.db, o.id)
-                        .await
-                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                    if credits <= 0 {
-                        return Err((StatusCode::PAYMENT_REQUIRED, format!(
-                            "今月の使用回数の上限（{}回）に達しました。追加クレジットを購入してください",
-                            limit
-                        )));
-                    }
-                    use_extra_credit = true;
-                } else {
-                    return Err((StatusCode::PAYMENT_REQUIRED, format!("今月の使用回数の上限（{}回）に達しました", limit)));
+                // monthly・trial ともにクレジットで継続利用可能
+                let credits = db::get_org_credits(&state.db, o.id)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                if credits <= 0 {
+                    return Err((StatusCode::PAYMENT_REQUIRED, format!(
+                        "使用回数の上限（{}回）に達しました。クレジットを購入するかプランをアップグレードしてください",
+                        limit
+                    )));
                 }
+                use_extra_credit = true;
             }
         }
     }

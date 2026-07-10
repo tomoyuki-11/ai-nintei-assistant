@@ -19,7 +19,7 @@ export async function checkPlanLimit(): Promise<LimitPlan | null> {
     const credits: number = s.credits ?? 0
     const blocked =
       s.is_expired ||
-      (s.plan === 'trial' && s.is_limit_reached) ||
+      (s.plan === 'trial' && s.is_limit_reached && credits <= 0) ||
       (s.plan === 'monthly' && s.is_limit_reached && credits <= 0) ||
       (s.plan === 'metered' && credits <= 0)
     return blocked ? s : null
