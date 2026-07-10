@@ -168,7 +168,9 @@ export default function HomePage() {
 
           {!loading && !error && history.length === 0 && (
             <div className="text-center py-16 text-gray-400">
-              <p className="text-4xl mb-3">📋</p>
+              <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto mb-3 w-12 h-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
               <p className="text-sm">調査履歴がありません</p>
               <p className="text-xs mt-1">「認定調査を開始」から始めてください</p>
             </div>
