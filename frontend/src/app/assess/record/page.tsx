@@ -17,7 +17,7 @@ export default function RecordPage() {
     setText, recordingError, setRecordingError,
     pendingAudio, downloadableAudio, hasPendingRecovery,
     startRecording, stopRecording, pauseRecording, resumeRecording,
-    retryTranscription, recoverAndTranscribe, discardRecovery,
+    retryTranscription, recoverAndTranscribe, getRecoveryBlob, discardRecovery,
     transcribeFile, transcribeBlob, downloadAudio, clearPendingAudio, clearRecording,
   } = useRecording()
 
@@ -367,7 +367,7 @@ export default function RecordPage() {
             <p className="text-xs text-orange-700 mb-2">リロード前の録音音声が保存されています。どうしますか？</p>
             <div className="flex gap-2 flex-wrap">
               <button onClick={handleRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">整形する</button>
-              <button onClick={startRecording} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
+              <button onClick={async () => { const blob = await getRecoveryBlob(); if (blob) continuationRef.current = blob; startRecording() }} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
               <button onClick={discardRecovery} disabled={isBusy} className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors">破棄</button>
             </div>
           </div>

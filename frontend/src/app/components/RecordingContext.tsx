@@ -22,6 +22,7 @@ type RecordingContextType = {
   transcribeBlob: (blob: Blob) => Promise<string>
   retryTranscription: () => Promise<string>
   recoverAndTranscribe: () => Promise<string>
+  getRecoveryBlob: () => Promise<Blob | null>
   discardRecovery: () => void
   downloadAudio: () => void
   clearPendingAudio: () => void
@@ -412,11 +413,13 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const startRecording = useCallback(async () => {
-    // 新しい録音開始時に前回のリカバリデータを破棄
+    // 新しい録音開始時に前回のリカバリデータ・テキストを破棄
     clearRecoveryDB()
     setHasPendingRecovery(false)
     localStorage.removeItem('pipeline_pending')
     localStorage.removeItem('pipeline_text')
+    setText('')
+    localStorage.removeItem(DRAFT_KEY)
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -599,6 +602,12 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return appendTranscription(result)
   }, [callWhisper, appendTranscription])
 
+  const getRecoveryBlob = useCallback(async (): Promise<Blob | null> => {
+    const data = await getRecoveryData()
+    if (!data || data.chunks.length === 0) return null
+    return new Blob(data.chunks, { type: data.mimeType })
+  }, [])
+
   const discardRecovery = useCallback(() => {
     clearRecoveryDB()
     setHasPendingRecovery(false)
@@ -667,6 +676,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       transcribeBlob,
       retryTranscription,
       recoverAndTranscribe,
+      getRecoveryBlob,
       discardRecovery,
       downloadAudio,
       clearPendingAudio,
