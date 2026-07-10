@@ -42,6 +42,9 @@ export default function PlanPage() {
   }, [router])
 
   async function handleStripe(type: 'monthly' | 'credit' | 'portal') {
+    if (type !== 'portal') {
+      localStorage.setItem('stripe_return_path', window.location.pathname)
+    }
     setLoading(type)
     setError('')
     try {
@@ -57,6 +60,7 @@ export default function PlanPage() {
       const data = await res.json()
       window.location.href = data.url
     } catch (e) {
+      if (type !== 'portal') localStorage.removeItem('stripe_return_path')
       setError(e instanceof Error ? e.message : '決済ページへの移動に失敗しました。しばらくしてからお試しください。')
       setLoading(null)
     }

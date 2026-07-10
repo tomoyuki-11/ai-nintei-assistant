@@ -25,7 +25,7 @@ export default function PaymentSuccessBanner() {
     }
   }, [pathname])
 
-  if (!type) return null
+  if (!type || pathname === '/') return null
 
   return (
     <div className="px-4 pt-3">
