@@ -281,6 +281,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const streamRef = useRef<MediaStream | null>(null)
   const downloadableAudioInitRef = useRef(false)
   const pendingAudioInitRef = useRef(false)
+  const userStoppedRef = useRef(false)
 
   const textRef = useRef('')
   textRef.current = text
@@ -336,6 +337,24 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       clearPendingAudioFromDB()
     }
   }, [pendingAudio])
+
+  // 画面が隠れる直前（電話着信・タブ切り替え等）に最新チャンクをDBへ書き出す
+  useEffect(() => {
+    function flushOnHide() {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        try { mediaRecorderRef.current.requestData() } catch {}
+      }
+    }
+    function handleVisibilityChange() {
+      if (document.hidden) flushOnHide()
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pagehide', flushOnHide)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pagehide', flushOnHide)
+    }
+  }, [])
 
   // Whisperが無音音声に対して返す既知のハルシネーションパターン
   const HALLUCINATIONS = [
@@ -456,6 +475,22 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      // 電話着信など予期せぬ停止のハンドラ（stopRecording呼び出し時に上書きされる）
+      function onInterrupted() {
+        if (userStoppedRef.current) return
+        streamRef.current?.getTracks().forEach((t) => t.stop())
+        setIsRecording(false)
+        setIsPaused(false)
+        if (chunksRef.current.length > 0) {
+          setHasPendingRecovery(true)
+          setRecordingError('通話などにより録音が中断されました。「録音を再開」から続きを録音できます。')
+        } else {
+          setRecordingError('録音が中断されました。もう一度録音してください。')
+        }
+      }
+      mediaRecorder.onstop = onInterrupted
+      mediaRecorder.onerror = () => onInterrupted()
+
       mediaRecorder.start(1000)
       setIsRecording(true)
       setIsPaused(false)
@@ -497,7 +532,9 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
 
     return new Promise((resolve) => {
+      userStoppedRef.current = true  // ユーザー操作による正常停止フラグ
       mediaRecorder.onstop = async () => {
+        userStoppedRef.current = false  // 次の録音のためリセット
         streamRef.current?.getTracks().forEach((t) => t.stop())
         setIsRecording(false)
         setIsPaused(false)
