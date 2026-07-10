@@ -145,7 +145,7 @@ export default function RecordPage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/format`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ text, id, save: true }),
+        body: JSON.stringify({ text }),
       })
       if (res.status === 402) {
         setError(await res.text().catch(() => '') || '使用回数の上限に達しています。クレジットを購入するか、プランをアップグレードしてください。')
@@ -158,6 +158,12 @@ export default function RecordPage() {
       localStorage.removeItem('pipeline_text')
       setPipelinePending(false)
       setText('')
+      // 保存・課金（クライアントが結果を受け取った後に実行）
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ text, formatted: data.formatted, id, save_text: false }),
+      }).catch(() => {})
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
       const msg = e instanceof Error ? e.message : ''
@@ -276,7 +282,7 @@ export default function RecordPage() {
           {showScreenWarning && !isPaused && (
             <p className="text-gray-500 text-lg mt-12">画面をオンのままにしてください</p>
           )}
-          <p className="text-gray-700 text-xs mt-4">リロードすると録音が停止します</p>
+          <p className="text-gray-700 text-xs mt-4">録音が完了するまで画面を閉じたり、再読み込みしないでください</p>
         </div>
       )}
 
@@ -292,7 +298,7 @@ export default function RecordPage() {
               <p className="text-xs text-gray-400 mt-1">しばらくお待ちください...</p>
             </div>
             <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-center">
-              <p className="text-xs font-semibold text-amber-800">リロードはしないでください</p>
+              <p className="text-xs font-semibold text-amber-800">整形が完了するまでページを離れないでください</p>
               <p className="text-xs text-amber-600 mt-0.5">データが失われる可能性があります</p>
             </div>
           </div>

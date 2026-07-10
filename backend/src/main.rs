@@ -913,6 +913,39 @@ async fn save_result_handler(
     auth: AuthUser,
     Json(body): Json<SaveResultRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    let org = db::get_organization(&state.db, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let year_month = Utc::now().format("%Y-%m").to_string();
+    let mut use_extra_credit = false;
+
+    // 使用回数インクリメント・クレジット消費
+    if let Some(ref o) = org {
+        if o.plan == "metered" {
+            use_extra_credit = true;
+        }
+        let plan_limit = match o.plan.as_str() {
+            "trial" => Some(TRIAL_MONTHLY_LIMIT),
+            "monthly" => Some(STANDARD_MONTHLY_LIMIT),
+            _ => None,
+        };
+        if let Some(limit) = plan_limit {
+            if o.plan == "monthly" {
+                let usage = db::get_monthly_usage(&state.db, o.id, &year_month)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                if usage >= limit {
+                    use_extra_credit = true;
+                }
+            }
+        }
+        let _ = db::increment_usage(&state.db, o.id, &year_month).await;
+        if use_extra_credit {
+            let _ = db::deduct_credit(&state.db, o.id).await;
+        }
+    }
+
     match body.id.as_deref().and_then(|s| Uuid::parse_str(s).ok()) {
         Some(id) => {
             db::update_formatted(&state.db, id, &body.formatted, auth.organization_id)
@@ -1009,35 +1042,7 @@ async fn format_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-    // 使用回数をインクリメント・クレジット消費
-    if let Some(ref o) = org {
-        let _ = db::increment_usage(&state.db, o.id, &year_month).await;
-        if use_extra_credit {
-            let _ = db::deduct_credit(&state.db, o.id).await;
-        }
-    }
-
-    if body.save.unwrap_or(true) {
-        match body.id.as_deref().and_then(|s| Uuid::parse_str(s).ok()) {
-            Some(id) => {
-                if let Err(e) = db::update_formatted(&state.db, id, &formatted, auth.organization_id).await {
-                    tracing::error!("Failed to update: {}", e);
-                }
-            }
-            None => {
-                if body.save_text.unwrap_or(true) {
-                    if let Err(e) = db::save_transcription(&state.db, &body.text, &formatted, auth.organization_id, &auth.name).await {
-                        tracing::error!("Failed to save: {}", e);
-                    }
-                } else {
-                    if let Err(e) = db::save_formatted_only(&state.db, &formatted, auth.organization_id, &auth.name).await {
-                        tracing::error!("Failed to save formatted: {}", e);
-                    }
-                }
-            }
-        }
-    }
-
+    // 保存・課金はクライアントが結果を受け取った後に /api/save-result で行う
     Ok(Json(FormatResponse { formatted }))
 }
 

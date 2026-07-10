@@ -42,7 +42,7 @@ export default function TextPage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/format`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ text, save: true, save_text: true }),
+        body: JSON.stringify({ text }),
         signal: controller.signal,
       })
       if (res.status === 402) {
@@ -53,6 +53,12 @@ export default function TextPage() {
       const data = await res.json()
       setResult(data.formatted)
       localStorage.removeItem('text_draft')
+      // 保存・課金（クライアントが結果を受け取った後に実行）
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ text, formatted: data.formatted, save_text: true }),
+      }).catch(() => {})
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') return

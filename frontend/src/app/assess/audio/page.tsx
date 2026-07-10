@@ -119,7 +119,7 @@ export default function AudioPage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/format`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ text: transcribedText, save: true }),
+        body: JSON.stringify({ text: transcribedText }),
         signal: controller.signal,
       })
       if (res.status === 402) {
@@ -131,6 +131,12 @@ export default function AudioPage() {
       setResult(data.formatted)
       clearUploadFile()
       setText('')
+      // 保存・課金（クライアントが結果を受け取った後に実行）
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ text: transcribedText, formatted: data.formatted, save_text: false }),
+      }).catch(() => {})
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') return
