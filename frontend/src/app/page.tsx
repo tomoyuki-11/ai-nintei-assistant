@@ -45,28 +45,26 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const checkoutType = params.get('checkout')
-      if (checkoutType === 'success' || checkoutType === 'credit') {
+    const params = new URLSearchParams(window.location.search)
+    const checkoutType = params.get('checkout')
+    if (checkoutType === 'success' || checkoutType === 'credit') {
+      const returnPath = localStorage.getItem('stripe_return_path') ?? '/'
+      localStorage.removeItem('stripe_return_path')
+      const paymentType = checkoutType === 'success' ? 'subscription' : 'credit'
+      sessionStorage.setItem('payment_banner', JSON.stringify({ type: paymentType, path: returnPath }))
+
+      if (returnPath !== '/') {
+        // ハードナビゲーション: router.replace は history.replaceState と組み合わせると
+        // iOS Safari で遷移が失敗することがある。window.location.replace は確実。
+        window.location.replace(returnPath)
+      } else {
+        // ホームにとどまる場合はURLだけクリーンアップしてイベント通知
         window.history.replaceState({}, '', '/')
-
-        const returnPath = localStorage.getItem('stripe_return_path') ?? '/'
-        localStorage.removeItem('stripe_return_path')
-        const paymentType = checkoutType === 'success' ? 'subscription' : 'credit'
-        sessionStorage.setItem('payment_banner', JSON.stringify({ type: paymentType, path: returnPath }))
-
-        if (returnPath !== '/') {
-          router.replace(returnPath)
-        } else {
-          // ホームの場合は PaymentSuccessBanner がすでに effect を実行済みのため
-          // カスタムイベントで再チェックさせる
-          window.dispatchEvent(new Event('payment_banner_ready'))
-        }
-        return
+        window.dispatchEvent(new Event('payment_banner_ready'))
       }
     }
-  }, [router])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!isAuthenticated()) {
