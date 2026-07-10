@@ -91,6 +91,7 @@ export default function TextPage() {
     setResult('')
     setError('')
     localStorage.removeItem('text_draft')
+    window.scrollTo(0, 0)
   }
 
   return (

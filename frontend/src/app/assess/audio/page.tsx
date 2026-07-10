@@ -172,6 +172,7 @@ export default function AudioPage() {
     setText('')
     clearUploadFile()
     if (fileInputRef.current) fileInputRef.current.value = ''
+    window.scrollTo(0, 0)
   }
 
   const isBusy = isTranscribing || isFormatting
