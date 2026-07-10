@@ -48,6 +48,13 @@ export default function PaymentSuccessBanner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
+  useEffect(() => {
+    const handle = () => tryShowBanner(pathname)
+    window.addEventListener('payment_banner_ready', handle)
+    return () => window.removeEventListener('payment_banner_ready', handle)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
+
   if (!type) return null
 
   return (

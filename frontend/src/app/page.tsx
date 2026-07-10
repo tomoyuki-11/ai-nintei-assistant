@@ -48,12 +48,17 @@ export default function HomePage() {
     const params = new URLSearchParams(window.location.search)
     const checkoutType = params.get('checkout')
     if (checkoutType === 'success' || checkoutType === 'credit') {
-      const stored = localStorage.getItem('stripe_return_path')
-      const returnPath = stored && stored !== '/' ? stored : '/plan'
+      const returnPath = localStorage.getItem('stripe_return_path') ?? '/'
       localStorage.removeItem('stripe_return_path')
       const paymentType = checkoutType === 'success' ? 'subscription' : 'credit'
       sessionStorage.setItem('payment_banner', JSON.stringify({ type: paymentType, path: returnPath }))
-      window.location.replace(returnPath)
+
+      if (returnPath !== '/') {
+        window.location.replace(returnPath)
+      } else {
+        window.history.replaceState({}, '', '/')
+        window.dispatchEvent(new Event('payment_banner_ready'))
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
