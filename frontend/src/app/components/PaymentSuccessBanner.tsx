@@ -15,6 +15,9 @@ export default function PaymentSuccessBanner() {
       setType(stored)
       const t = setTimeout(() => setType(null), 8000)
       return () => clearTimeout(t)
+    } else {
+      // ページ遷移時はバナーを消す
+      setType(null)
     }
   }, [pathname])
 
