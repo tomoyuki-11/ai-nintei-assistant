@@ -55,7 +55,7 @@ export default function PlanBanner() {
   }, [])
 
   async function handleUpgrade() {
-    localStorage.setItem('stripe_return_path', window.location.pathname)
+    localStorage.setItem('stripe_return_path', '/plan')
     setUpgrading(true)
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-checkout-session`, {
@@ -73,7 +73,7 @@ export default function PlanBanner() {
   }
 
   async function handleCreditPurchase() {
-    localStorage.setItem('stripe_return_path', window.location.pathname)
+    localStorage.setItem('stripe_return_path', '/plan')
     setPurchasing(true)
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-credit-checkout`, {

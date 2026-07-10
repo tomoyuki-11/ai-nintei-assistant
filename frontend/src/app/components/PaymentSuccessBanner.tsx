@@ -48,14 +48,6 @@ export default function PaymentSuccessBanner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
-  // ホームページの checkout effect が sessionStorage を書いた後に通知を受け取る
-  useEffect(() => {
-    const handle = () => tryShowBanner(pathname)
-    window.addEventListener('payment_banner_ready', handle)
-    return () => window.removeEventListener('payment_banner_ready', handle)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname])
-
   if (!type) return null
 
   return (

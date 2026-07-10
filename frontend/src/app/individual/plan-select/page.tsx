@@ -27,6 +27,7 @@ export default function PlanSelectPage() {
   async function handleStripe(type: 'monthly' | 'credit') {
     setLoading(type)
     setError('')
+    localStorage.setItem('stripe_return_path', '/plan')
     try {
       const endpoint = type === 'monthly'
         ? '/api/stripe/create-checkout-session'
@@ -40,6 +41,7 @@ export default function PlanSelectPage() {
       await completeOnboarding()
       window.location.href = data.url
     } catch {
+      localStorage.removeItem('stripe_return_path')
       setError('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
       setLoading(null)
     }
