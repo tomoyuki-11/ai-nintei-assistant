@@ -31,7 +31,6 @@ export default function HomePage() {
   const [error, setError] = useState('')
   const [openFormattedId, setOpenFormattedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [paymentSuccess, setPaymentSuccess] = useState<'subscription' | 'credit' | null>(null)
   const [splash, setSplash] = useState<'visible' | 'fading' | 'hidden'>('visible')
   const [headerHeight, setHeaderHeight] = useState(61)
 
@@ -52,33 +51,19 @@ export default function HomePage() {
       if (checkoutType === 'success' || checkoutType === 'credit') {
         window.history.replaceState({}, '', '/')
 
-        // 元いたページへ戻る（PlanLimitModalから遷移した場合）
-        const returnPath = localStorage.getItem('stripe_return_path')
+        const returnPath = localStorage.getItem('stripe_return_path') ?? '/'
         localStorage.removeItem('stripe_return_path')
-        if (returnPath && returnPath !== '/') {
-          // 戻り先ページでバナーを表示するためsessionStorageにpath付きで保存
-          const paymentType = checkoutType === 'success' ? 'subscription' : 'credit'
-          sessionStorage.setItem('payment_banner', JSON.stringify({ type: paymentType, path: returnPath }))
-          router.replace(returnPath)
-          return
-        }
+        const paymentType = checkoutType === 'success' ? 'subscription' : 'credit'
+        sessionStorage.setItem('payment_banner', JSON.stringify({ type: paymentType, path: returnPath }))
 
-        // 元ページなし → ホームでバナー表示（既存の動作）
-        if (checkoutType === 'success') {
-          setPaymentSuccess('subscription')
-          const timers = [2000, 5000, 10000].map((ms) =>
-            setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
-          )
-          const hideTimer = setTimeout(() => setPaymentSuccess(null), 8000)
-          return () => { timers.forEach(clearTimeout); clearTimeout(hideTimer) }
+        if (returnPath !== '/') {
+          router.replace(returnPath)
         } else {
-          setPaymentSuccess('credit')
-          const timers = [2000, 5000].map((ms) =>
-            setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
-          )
-          const hideTimer = setTimeout(() => setPaymentSuccess(null), 8000)
-          return () => { timers.forEach(clearTimeout); clearTimeout(hideTimer) }
+          // ホームの場合は PaymentSuccessBanner がすでに effect を実行済みのため
+          // カスタムイベントで再チェックさせる
+          window.dispatchEvent(new Event('payment_banner_ready'))
         }
+        return
       }
     }
   }, [router])
@@ -160,23 +145,6 @@ export default function HomePage() {
       </div>
     )}
     <main className="flex-1 bg-gray-50">
-
-      {/* 決済バナー（スクロールで消える） */}
-      {paymentSuccess && (
-        <div className="px-4 pt-3 pb-3">
-          <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between">
-            <p className="text-sm text-green-700 font-medium">
-              {paymentSuccess === 'credit'
-                ? 'クレジットの購入が完了しました！（1回分追加）'
-                : 'スタンダードプランへのアップグレードが完了しました！'}
-            </p>
-            <button
-              onClick={() => setPaymentSuccess(null)}
-              className="text-green-500 hover:text-green-700 text-lg leading-none"
-            >×</button>
-          </div>
-        </div>
-      )}
 
       {/* 認定調査を開始ボタン（AppHeader直下にスティッキー固定） */}
       <div

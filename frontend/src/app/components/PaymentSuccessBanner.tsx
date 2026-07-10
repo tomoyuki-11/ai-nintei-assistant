@@ -7,46 +7,56 @@ export default function PaymentSuccessBanner() {
   const [type, setType] = useState<'subscription' | 'credit' | null>(null)
   const pathname = usePathname()
   const bannerPageRef = useRef<string | null>(null)
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
-  useEffect(() => {
-    // ホームは独自のバナーがあるため表示しない
-    if (pathname === '/') {
-      setType(null)
-      bannerPageRef.current = null
-      return
-    }
+  function tryShowBanner(currentPath: string) {
+    timersRef.current.forEach(clearTimeout)
+    timersRef.current = []
 
-    // sessionStorageから取得し、現在のパスと一致する場合のみ表示
     const stored = sessionStorage.getItem('payment_banner')
     if (stored) {
       try {
         const { type: t, path } = JSON.parse(stored) as { type: string; path: string }
-        if (path === pathname && (t === 'credit' || t === 'subscription')) {
+        if (path === currentPath && (t === 'credit' || t === 'subscription')) {
           sessionStorage.removeItem('payment_banner')
-          bannerPageRef.current = pathname
+          bannerPageRef.current = currentPath
           setType(t as 'credit' | 'subscription')
-          // PlanBannerを更新
           window.dispatchEvent(new Event('planStatusChanged'))
-          const retryTimers = [2000, 5000].map((ms) =>
-            setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
-          )
-          const hideTimer = setTimeout(() => setType(null), 8000)
-          return () => {
-            clearTimeout(hideTimer)
-            retryTimers.forEach(clearTimeout)
-          }
+          timersRef.current = [
+            ...[2000, 5000].map((ms) =>
+              setTimeout(() => window.dispatchEvent(new Event('planStatusChanged')), ms)
+            ),
+            setTimeout(() => setType(null), 8000),
+          ]
+          return
         }
       } catch {}
     }
 
-    // 別ページへ遷移したらバナーをリセット
-    if (pathname !== bannerPageRef.current) {
+    if (currentPath !== bannerPageRef.current) {
       setType(null)
       bannerPageRef.current = null
     }
+  }
+
+  useEffect(() => {
+    tryShowBanner(pathname)
+    return () => {
+      timersRef.current.forEach(clearTimeout)
+      timersRef.current = []
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
-  if (!type || pathname === '/') return null
+  // ホームページの checkout effect が sessionStorage を書いた後に通知を受け取る
+  useEffect(() => {
+    const handle = () => tryShowBanner(pathname)
+    window.addEventListener('payment_banner_ready', handle)
+    return () => window.removeEventListener('payment_banner_ready', handle)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
+
+  if (!type) return null
 
   return (
     <div className="px-4 pt-3">
