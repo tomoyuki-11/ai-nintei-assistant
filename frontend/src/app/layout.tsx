@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppHeader from "./components/AppHeader";
+import PaymentSuccessBanner from "./components/PaymentSuccessBanner";
 import { RecordingProvider } from "./components/RecordingContext";
 
 const geistSans = Geist({
@@ -41,6 +42,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <RecordingProvider>
           <AppHeader />
+          <PaymentSuccessBanner />
           {children}
         </RecordingProvider>
       </body>
