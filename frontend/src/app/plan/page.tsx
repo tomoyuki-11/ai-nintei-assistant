@@ -41,6 +41,15 @@ export default function PlanPage() {
       .catch(() => {})
   }, [router])
 
+  // iOS bfcache: Stripe で × を押してブラウザバックで戻った際に状態をリセット
+  useEffect(() => {
+    function handlePageShow(e: PageTransitionEvent) {
+      if (e.persisted) setLoading(null)
+    }
+    window.addEventListener('pageshow', handlePageShow)
+    return () => window.removeEventListener('pageshow', handlePageShow)
+  }, [])
+
   async function handleStripe(type: 'monthly' | 'credit' | 'portal') {
     if (type !== 'portal') {
       localStorage.setItem('stripe_return_path', window.location.pathname)
