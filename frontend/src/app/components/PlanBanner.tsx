@@ -37,11 +37,20 @@ export default function PlanBanner() {
         fetchStatus()
       }
     }
+    // iOS bfcache: Stripe で × を押してブラウザバックで戻った際に状態をリセット
+    function handlePageShow(e: PageTransitionEvent) {
+      if (e.persisted) {
+        setUpgrading(false)
+        setPurchasing(false)
+      }
+    }
     window.addEventListener('planStatusChanged', fetchStatus)
     window.addEventListener('authChanged', handleAuthChanged)
+    window.addEventListener('pageshow', handlePageShow)
     return () => {
       window.removeEventListener('planStatusChanged', fetchStatus)
       window.removeEventListener('authChanged', handleAuthChanged)
+      window.removeEventListener('pageshow', handlePageShow)
     }
   }, [])
 
