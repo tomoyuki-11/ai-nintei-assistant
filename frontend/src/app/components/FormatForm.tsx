@@ -169,6 +169,14 @@ export default function FormatForm() {
 
       const data = await response.json()
       setResult(data.formatted)
+
+      // 課金・DB保存は save-result で行う
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ text, formatted: data.formatted, id: savedId, save_text: true }),
+      })
+
       window.dispatchEvent(new Event('planStatusChanged'))
       setSavedId(null)
       clearRecording()
