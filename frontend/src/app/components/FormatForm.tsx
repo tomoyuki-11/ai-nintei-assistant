@@ -9,16 +9,6 @@ import { downloadExcel } from '@/lib/excel'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
 import { useRecording, getExtFromMime } from './RecordingContext'
 
-type Settings = {
-  transcription_save_mode: 'auto' | 'confirm'
-  formatted_save_mode: 'auto' | 'confirm'
-}
-
-type ConfirmState =
-  | { type: 'transcription'; text: string }
-  | { type: 'formatted'; text: string; formatted: string; id: string | null }
-  | null
-
 export default function FormatForm() {
   const router = useRouter()
   const { isRecording, isPaused, isTranscribing, text, setText, recordingError, setRecordingError, pendingAudio, downloadableAudio, hasPendingRecovery, startRecording, stopRecording, pauseRecording, resumeRecording, transcribeFile, retryTranscription, recoverAndTranscribe, discardRecovery, downloadAudio, clearPendingAudio, clearRecording } = useRecording()
@@ -27,9 +17,6 @@ export default function FormatForm() {
   const [error, setError] = useState('')
   const [savedId, setSavedId] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState('')
-  const [settings, setSettings] = useState<Settings>({ transcription_save_mode: 'auto', formatted_save_mode: 'auto' })
-  const [confirm, setConfirm] = useState<ConfirmState>(null)
-  const [transcriptionDeclined, setTranscriptionDeclined] = useState(false)
   const [showFormatConfirm, setShowFormatConfirm] = useState(false)
   const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null)
   const [isIOS, setIsIOS] = useState(false)
@@ -47,8 +34,6 @@ export default function FormatForm() {
     const ios = /iPhone|iPad|iPod/.test(ua)
     setIsIOS(ios)
     setIsMobile(/iPhone|iPad|iPod|Android/.test(ua))
-    // 警告はSafari（Chrome等を除く）またはPWAのみ
-    // iOSは全ブラウザ（Safari・Chrome等）でスリープ時に音声セッションが中断されるため警告表示
     setShowScreenWarning(ios)
   }, [])
 
@@ -78,7 +63,6 @@ export default function FormatForm() {
     return () => { clearRecording() }
   }, [clearRecording])
 
-  // 録音中はプルトゥリフレッシュを無効化
   useEffect(() => {
     if (!isRecording) return
     const prevent = (e: TouchEvent) => e.preventDefault()
@@ -86,7 +70,6 @@ export default function FormatForm() {
     return () => document.removeEventListener('touchmove', prevent)
   }, [isRecording])
 
-  // 録音中にリロード・タブを閉じようとしたら警告
   useEffect(() => {
     if (!isRecording) return
     const warn = (e: BeforeUnloadEvent) => {
@@ -97,14 +80,10 @@ export default function FormatForm() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [isRecording])
 
-  // 録音中はスワイプによる画面遷移を防止
   useEffect(() => {
     if (!isRecording) return
-    // ダミー履歴エントリを追加し、スワイプで戻ろうとしたら即座に元の位置に戻す
     history.pushState(null, '', location.href)
-    const handlePopState = () => {
-      history.pushState(null, '', location.href)
-    }
+    const handlePopState = () => { history.pushState(null, '', location.href) }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [isRecording])
@@ -118,13 +97,8 @@ export default function FormatForm() {
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/settings`, { headers: authHeaders() })
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => { if (data) setSettings(data) })
-      .catch(() => {})
   }, [router])
 
-  // コンテキストのエラーをローカルのerrorに表示（8秒後に自動消去）
   useEffect(() => {
     if (recordingError) {
       setError(recordingError)
@@ -154,11 +128,7 @@ export default function FormatForm() {
   async function handleStopRecording() {
     const currentText = await stopRecording()
     if (!currentText.trim()) return
-    if (settings.transcription_save_mode === 'confirm') {
-      setConfirm({ type: 'transcription', text: currentText })
-    } else {
-      await saveTranscription(currentText)
-    }
+    await saveTranscription(currentText)
   }
 
   async function saveTranscription(currentText: string) {
@@ -189,12 +159,7 @@ export default function FormatForm() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/format`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({
-          text,
-          id: savedId,
-          save: settings.formatted_save_mode === 'auto',
-          save_text: !transcriptionDeclined,
-        }),
+        body: JSON.stringify({ text, id: savedId, save: true, save_text: true }),
       })
 
       if (!response.ok) {
@@ -205,14 +170,9 @@ export default function FormatForm() {
       const data = await response.json()
       setResult(data.formatted)
       window.dispatchEvent(new Event('planStatusChanged'))
-
-      if (settings.formatted_save_mode === 'confirm') {
-        setConfirm({ type: 'formatted', text, formatted: data.formatted, id: savedId })
-      } else {
-        setSavedId(null)
-        clearRecording()
-        showSaveMessage('整形結果を保存しました')
-      }
+      setSavedId(null)
+      clearRecording()
+      showSaveMessage('整形結果を保存しました')
     } catch (e) {
       setError(e instanceof Error ? e.message : '予期しないエラーが発生しました')
     } finally {
@@ -220,40 +180,11 @@ export default function FormatForm() {
     }
   }
 
-  async function handleConfirmYes() {
-    if (!confirm) return
-    if (confirm.type === 'transcription') {
-      setConfirm(null)
-      await saveTranscription(confirm.text)
-    } else {
-      const payload = { text: confirm.text, formatted: confirm.formatted, id: confirm.id, save_text: !transcriptionDeclined }
-      setConfirm(null)
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify(payload),
-        })
-        setSavedId(null)
-        clearRecording()
-        showSaveMessage('整形結果を保存しました')
-      } catch (e) {
-        console.error('Failed to save result:', e)
-      }
-    }
-  }
-
-  function handleConfirmNo() {
-    if (confirm?.type === 'transcription') setTranscriptionDeclined(true)
-    setConfirm(null)
-  }
-
   return (
     <div className="space-y-6">
       {/* iOS録音中フルスクリーンオーバーレイ（節電・OLED最適化） */}
       {isRecording && isIOS && (
         <div className="fixed inset-0 z-200 bg-black flex flex-col items-center justify-center select-none">
-          {/* タイマー */}
           {(() => { const { h, m, s } = timeParts(recordingSeconds); return (
             <div className={`flex items-center gap-2 mb-14 ${inter.variable}`} style={{ fontFamily: '-apple-system, "SF Pro Display", BlinkMacSystemFont, var(--font-inter), system-ui, sans-serif' }}>
               <span className="text-gray-400 text-5xl font-light">{h}</span>
@@ -264,17 +195,14 @@ export default function FormatForm() {
             </div>
           ) })()}
 
-          {/* 録音インジケーター */}
           <div className="flex items-center justify-center mb-14">
             <div className={`w-5 h-5 rounded-full transition-colors duration-300 ${isPaused ? 'bg-gray-600' : 'bg-red-500 animate-pulse'}`} />
           </div>
 
-          {/* ステータス */}
           <p className="text-gray-500 text-sm mb-14">
             {isPaused ? '一時停止中' : '録音中'}
           </p>
 
-          {/* ボタン */}
           <div className="flex gap-10 items-center">
             <button
               onClick={handleStopRecording}
@@ -452,34 +380,6 @@ export default function FormatForm() {
         </div>
       )}
 
-      {/* 確認モーダル */}
-      {confirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
-            <p className="text-sm font-semibold text-gray-900 mb-2">
-              {confirm.type === 'transcription' ? '文字起こしを保存しますか？' : '整形結果を保存しますか？'}
-            </p>
-            <p className="text-xs text-gray-500 mb-5">
-              「いいえ」を選択すると保存されません。
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleConfirmNo}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                いいえ
-              </button>
-              <button
-                onClick={handleConfirmYes}
-                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors"
-              >
-                はい
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div>
         <div className="flex items-center gap-3 mb-2">
           {isTranscribing ? (
@@ -520,7 +420,6 @@ export default function FormatForm() {
             <span className="text-xs text-green-600 font-medium">✓ {saveMessage}</span>
           )}
         </div>
-        {/* 音声ファイルアップロード / 録音済み音声リトライ */}
         <div className="flex items-center gap-2 mt-1 mb-3">
           <input
             ref={fileInputRef}
@@ -566,7 +465,6 @@ export default function FormatForm() {
             </button>
           )}
         </div>
-        {/* リロード中断からの録音復元 */}
         {hasPendingRecovery && (
           <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-3">
             <p className="text-xs font-medium text-orange-800 mb-1">前回の録音データが見つかりました</p>

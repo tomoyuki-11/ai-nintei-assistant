@@ -5,24 +5,11 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { authHeaders, getTokenPayload, isAuthenticated } from '@/lib/auth'
 
-type SaveMode = 'auto' | 'confirm'
-type Settings = {
-  transcription_save_mode: SaveMode
-  formatted_save_mode: SaveMode
-}
-const MODE_LABELS: Record<SaveMode, string> = { auto: '自動保存', confirm: '確認モーダル' }
-
 const APP_VERSION = '0.1.0'
 const CONTACT_EMAIL = 'tomoyukiyasohara@gmail.com'
 
 export default function SettingsPage() {
   const router = useRouter()
-  const [settings, setSettings] = useState<Settings | null>(null)
-  const [settingsLoading, setSettingsLoading] = useState(true)
-  const [settingsSaving, setSettingsSaving] = useState(false)
-  const [settingsSaved, setSettingsSaved] = useState(false)
-  const [settingsError, setSettingsError] = useState('')
-
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -32,40 +19,12 @@ export default function SettingsPage() {
   const [passwordSaved, setPasswordSaved] = useState(false)
 
   const payload = getTokenPayload()
-  const isIndividual = payload?.role === 'individual'
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
     const p = getTokenPayload()
     if (p?.role !== 'admin' && p?.role !== 'individual') { router.push('/'); return }
-
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/settings`, { headers: authHeaders() })
-      .then((res) => { if (!res.ok) throw new Error(`エラー: ${res.status}`); return res.json() })
-      .then((data) => setSettings(data))
-      .catch((e) => setSettingsError(e.message))
-      .finally(() => setSettingsLoading(false))
   }, [router])
-
-  async function handleSaveSettings() {
-    if (!settings) return
-    setSettingsSaving(true)
-    setSettingsSaved(false)
-    setSettingsError('')
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(settings),
-      })
-      if (!res.ok) throw new Error(`エラー: ${res.status}`)
-      setSettingsSaved(true)
-      setTimeout(() => setSettingsSaved(false), 3000)
-    } catch (e) {
-      setSettingsError(e instanceof Error ? e.message : '保存に失敗しました')
-    } finally {
-      setSettingsSaving(false)
-    }
-  }
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault()
@@ -184,68 +143,6 @@ export default function SettingsPage() {
               </div>
             </div>
           </section>
-
-          {/* ── 保存設定 ─────────────────────────────────── */}
-          {settings && (
-            <section>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">保存設定</p>
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
-                <div className="px-5 py-5">
-                  <p className="text-sm font-medium text-gray-800 mb-1">文字起こしの保存</p>
-                  <p className="text-xs text-gray-500 mb-3">録音停止後の文字起こし保存の動作</p>
-                  <div className="flex gap-3">
-                    {(['auto', 'confirm'] as SaveMode[]).map((mode) => (
-                      <button
-                        key={mode}
-                        onClick={() => setSettings({ ...settings, transcription_save_mode: mode })}
-                        className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
-                          settings.transcription_save_mode === mode
-                            ? 'border-blue-500 bg-blue-50 text-blue-700'
-                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        {MODE_LABELS[mode]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="px-5 py-5">
-                  <p className="text-sm font-medium text-gray-800 mb-1">整形結果の保存</p>
-                  <p className="text-xs text-gray-500 mb-3">AI整形実行後の保存の動作</p>
-                  <div className="flex gap-3">
-                    {(['auto', 'confirm'] as SaveMode[]).map((mode) => (
-                      <button
-                        key={mode}
-                        onClick={() => setSettings({ ...settings, formatted_save_mode: mode })}
-                        className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
-                          settings.formatted_save_mode === mode
-                            ? 'border-blue-500 bg-blue-50 text-blue-700'
-                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        {MODE_LABELS[mode]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="px-5 py-4 flex items-center justify-between">
-                  {settingsSaved && <span className="text-sm text-green-600 font-medium">保存しました</span>}
-                  {settingsError && <span className="text-sm text-red-600">{settingsError}</span>}
-                  {!settingsSaved && !settingsError && <span />}
-                  <button
-                    onClick={handleSaveSettings}
-                    disabled={settingsSaving}
-                    className="rounded-lg bg-blue-600 px-5 py-2 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    {settingsSaving ? '保存中...' : '設定を保存'}
-                  </button>
-                </div>
-              </div>
-            </section>
-          )}
-          {settingsLoading && (
-            <p className="text-sm text-gray-400 px-1">保存設定を読み込み中...</p>
-          )}
 
           {/* ── サポート ─────────────────────────────────── */}
           <section>
