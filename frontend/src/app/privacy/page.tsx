@@ -24,7 +24,7 @@ export default function PrivacyPolicyPage() {
             </p>
             <div className="mt-2 bg-gray-100 rounded-lg px-4 py-3 text-xs">
               <p>運営者：運営者</p>
-              <p>サービスURL：【サービスURL】</p>
+              <p>サービスURL：https://ai-nintei-assistant.com/</p>
               <p>お問い合わせ：tomoyukiyasohara@gmail.com</p>
             </div>
           </section>
