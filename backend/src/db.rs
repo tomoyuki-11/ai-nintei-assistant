@@ -503,6 +503,25 @@ pub async fn find_individual_user_by_email(
     .await
 }
 
+pub async fn get_user_password_hash(pool: &PgPool, user_id: Uuid) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT password_hash FROM users WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(h,)| h))
+}
+
+pub async fn update_user_password(pool: &PgPool, user_id: Uuid, new_hash: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+        .bind(new_hash)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn complete_individual_onboarding(
     pool: &PgPool,
     user_id: Uuid,

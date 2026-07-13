@@ -105,6 +105,12 @@ struct IndividualAuthRequest {
     password: String,
 }
 
+#[derive(Deserialize)]
+struct ChangePasswordRequest {
+    current_password: String,
+    new_password: String,
+}
+
 #[derive(Serialize)]
 struct IndividualAuthResponse {
     token: String,
@@ -286,6 +292,7 @@ async fn main() {
         .route("/api/auth/signup", post(signup_handler))
         .route("/api/auth/login", post(login_handler))
         .route("/api/auth/license/{key}", get(license_check_handler))
+        .route("/api/auth/password", axum::routing::patch(change_password_handler))
         .route("/api/staff", get(list_staff_handler).post(create_staff_handler))
         .route("/api/staff/{id}", axum::routing::delete(delete_staff_handler))
         .route("/api/settings", get(get_settings_handler).patch(update_settings_handler))
@@ -707,6 +714,38 @@ async fn individual_login_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(IndividualAuthResponse { token, is_first_login }))
+}
+
+async fn change_password_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<ChangePasswordRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    if body.new_password.len() < 6 {
+        return Err((StatusCode::BAD_REQUEST, "新しいパスワードは6文字以上にしてください".to_string()));
+    }
+
+    let current_hash = db::get_user_password_hash(&state.db, auth.user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "ユーザーが見つかりません".to_string()))?;
+
+    let current_password = body.current_password.clone();
+    let valid = tokio::task::spawn_blocking(move || bcrypt::verify(&current_password, &current_hash))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !valid {
+        return Err((StatusCode::UNAUTHORIZED, "現在のパスワードが正しくありません".to_string()));
+    }
+
+    let new_hash = hash_password(&body.new_password).await?;
+    db::update_user_password(&state.db, auth.user_id, &new_hash)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn complete_onboarding_handler(

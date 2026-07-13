@@ -70,7 +70,15 @@ export default function HamburgerMenu() {
           >
             ホーム
           </Link>
-          <div className="border-t border-gray-100 my-1" />
+          {isIndividual && (
+            <Link
+              href="/plan"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              プラン
+            </Link>
+          )}
           {isAdmin && (
             <Link
               href="/staff"
@@ -80,15 +88,13 @@ export default function HamburgerMenu() {
               スタッフ管理
             </Link>
           )}
-          {isIndividual && (
-            <Link
-              href="/plan"
-              onClick={() => setOpen(false)}
-              className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              プラン変更
-            </Link>
-          )}
+          <Link
+            href="/settings"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            設定
+          </Link>
           <div className="border-t border-gray-100 my-1" />
           <button
             onClick={handleLogout}
