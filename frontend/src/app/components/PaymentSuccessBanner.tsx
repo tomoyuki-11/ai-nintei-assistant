@@ -58,7 +58,7 @@ export default function PaymentSuccessBanner() {
   if (!type) return null
 
   return (
-    <div className="px-4 pt-3">
+    <div className="px-4 pt-3 bg-white">
       <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between">
         <p className="text-sm text-green-700 font-medium">
           {type === 'credit'
