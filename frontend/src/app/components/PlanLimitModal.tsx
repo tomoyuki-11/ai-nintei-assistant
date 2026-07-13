@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { authHeaders, getTokenPayload } from '@/lib/auth'
 
 export type LimitPlan = {
@@ -34,66 +34,14 @@ type Props = {
 }
 
 export default function PlanLimitModal({ limitPlan, onClose }: Props) {
-  const [isPurchasing, setIsPurchasing] = useState(false)
-  const [isUpgrading, setIsUpgrading] = useState(false)
-
-  // iOS bfcache: Stripe で × を押してブラウザバックで戻った際に状態をリセット
-  useEffect(() => {
-    const handlePageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) {
-        setIsPurchasing(false)
-        setIsUpgrading(false)
-        onClose()
-      }
-    }
-    window.addEventListener('pageshow', handlePageShow)
-    return () => window.removeEventListener('pageshow', handlePageShow)
-  }, [onClose])
-
   if (!limitPlan) return null
 
   const isIndividual = getTokenPayload()?.role === 'individual'
-  const showUpgrade = isIndividual && (limitPlan.is_expired || limitPlan.plan === 'trial')
-  const showCredit = isIndividual
   const message = limitPlan.is_expired
     ? 'トライアル期間が終了しました。プランを選択してください。'
     : limitPlan.plan === 'trial'
     ? `今月の使用回数の上限（${limitPlan.monthly_limit}回）に達しました。プランをアップグレードすると続けて利用できます。`
     : 'クレジットが不足しています。クレジットを購入してください。'
-
-  async function handleCreditPurchase() {
-    localStorage.setItem('stripe_return_path', window.location.pathname)
-    setIsPurchasing(true)
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-credit-checkout`, {
-        method: 'POST', headers: authHeaders(),
-      })
-      if (!res.ok) throw new Error()
-      window.location.href = (await res.json()).url
-    } catch {
-      localStorage.removeItem('stripe_return_path')
-      alert('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
-      setIsPurchasing(false)
-    }
-  }
-
-  async function handleUpgrade() {
-    localStorage.setItem('stripe_return_path', window.location.pathname)
-    setIsUpgrading(true)
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-checkout-session`, {
-        method: 'POST', headers: authHeaders(),
-      })
-      if (!res.ok) throw new Error()
-      window.location.href = (await res.json()).url
-    } catch {
-      localStorage.removeItem('stripe_return_path')
-      alert('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
-      setIsUpgrading(false)
-    }
-  }
-
-  const busy = isPurchasing || isUpgrading
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -101,23 +49,14 @@ export default function PlanLimitModal({ limitPlan, onClose }: Props) {
         <p className="text-sm font-semibold text-gray-900 mb-3">実行できません</p>
         <p className="text-sm text-gray-600 mb-5">{message}</p>
         <div className="flex flex-col gap-2">
-          {showCredit && (
-            <button
-              onClick={handleCreditPurchase}
-              disabled={busy}
-              className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          {isIndividual && (
+            <Link
+              href="/plan"
+              onClick={onClose}
+              className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 transition-colors text-center"
             >
-              {isPurchasing ? '処理中...' : 'クレジットを購入（1回分）'}
-            </button>
-          )}
-          {showUpgrade && (
-            <button
-              onClick={handleUpgrade}
-              disabled={busy}
-              className="w-full rounded-lg bg-purple-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
-            >
-              {isUpgrading ? '処理中...' : '月額プランに申し込む'}
-            </button>
+              プラン変更ページへ
+            </Link>
           )}
           <button
             onClick={onClose}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { authHeaders, isAuthenticated, getTokenPayload } from '@/lib/auth'
 
 type PlanStatus = {
@@ -16,7 +17,6 @@ type PlanStatus = {
 export default function PlanBanner() {
   const [status, setStatus] = useState<PlanStatus | null>(null)
   const [upgrading, setUpgrading] = useState(false)
-  const [purchasing, setPurchasing] = useState(false)
 
   function fetchStatus() {
     if (!isAuthenticated()) return
@@ -37,12 +37,8 @@ export default function PlanBanner() {
         fetchStatus()
       }
     }
-    // iOS bfcache: Stripe で × を押してブラウザバックで戻った際に状態をリセット
     function handlePageShow(e: PageTransitionEvent) {
-      if (e.persisted) {
-        setUpgrading(false)
-        setPurchasing(false)
-      }
+      if (e.persisted) setUpgrading(false)
     }
     window.addEventListener('planStatusChanged', fetchStatus)
     window.addEventListener('authChanged', handleAuthChanged)
@@ -54,6 +50,7 @@ export default function PlanBanner() {
     }
   }, [])
 
+  // 法人・スタッフ向けのみStripe直接遷移（個人はプラン変更ページへ誘導）
   async function handleUpgrade() {
     localStorage.setItem('stripe_return_path', window.location.pathname)
     setUpgrading(true)
@@ -72,24 +69,6 @@ export default function PlanBanner() {
     }
   }
 
-  async function handleCreditPurchase() {
-    localStorage.setItem('stripe_return_path', window.location.pathname)
-    setPurchasing(true)
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stripe/create-credit-checkout`, {
-        method: 'POST',
-        headers: authHeaders(),
-      })
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      window.location.href = data.url
-    } catch {
-      localStorage.removeItem('stripe_return_path')
-      alert('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
-      setPurchasing(false)
-    }
-  }
-
   if (!status) return null
 
   const isIndividual = getTokenPayload()?.role === 'individual'
@@ -99,22 +78,12 @@ export default function PlanBanner() {
       return (
         <div className="bg-red-50 border-b border-red-200 px-4 py-2 flex items-center justify-between text-xs text-red-700">
           <span className="font-medium">トライアル期間が終了しました。プランを選択してください。</span>
-          <span className="flex items-center gap-2">
-            <button
-              onClick={handleCreditPurchase}
-              disabled={purchasing}
-              className="rounded-md bg-blue-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {purchasing ? '処理中...' : '従量課金で始める'}
-            </button>
-            <button
-              onClick={handleUpgrade}
-              disabled={upgrading}
-              className="rounded-md bg-purple-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
-            >
-              {upgrading ? '処理中...' : '月額プランに申し込む'}
-            </button>
-          </span>
+          <Link
+            href="/plan"
+            className="rounded-md bg-red-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-red-700 transition-colors"
+          >
+            プラン変更
+          </Link>
         </div>
       )
     }
@@ -145,26 +114,14 @@ export default function PlanBanner() {
             {status.is_limit_reached && <span className="ml-1 font-semibold">（上限到達）</span>}
           </span>
           {isIndividual ? (
-            <>
-              <button
-                onClick={handleCreditPurchase}
-                disabled={purchasing}
-                className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium disabled:opacity-50 transition-colors ${
-                  isWarning ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'
-                }`}
-              >
-                {purchasing ? '処理中...' : '従量課金'}
-              </button>
-              <button
-                onClick={handleUpgrade}
-                disabled={upgrading}
-                className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium disabled:opacity-50 transition-colors ${
-                  isWarning ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-              >
-                {upgrading ? '処理中...' : '月額プラン'}
-              </button>
-            </>
+            <Link
+              href="/plan"
+              className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium transition-colors ${
+                isWarning ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              プラン変更
+            </Link>
           ) : (
             <button
               onClick={handleUpgrade}
@@ -193,15 +150,14 @@ export default function PlanBanner() {
           残クレジット: <span className="font-semibold">{status.credits ?? 0} 回</span>
           {noCredits && <span className="ml-1 font-semibold">（クレジット不足）</span>}
         </span>
-        <button
-          onClick={handleCreditPurchase}
-          disabled={purchasing}
-          className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium disabled:opacity-50 transition-colors ${
+        <Link
+          href="/plan"
+          className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium transition-colors ${
             noCredits ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-600 hover:bg-gray-700'
           }`}
         >
-          {purchasing ? '処理中...' : 'クレジットを購入（¥600/回）'}
-        </button>
+          クレジットを購入（¥600/回）
+        </Link>
       </div>
     )
   }
@@ -221,13 +177,12 @@ export default function PlanBanner() {
           {status.is_limit_reached && <span className="ml-1 font-semibold">（上限到達）</span>}
         </span>
         {status.is_limit_reached && (
-          <button
-            onClick={handleCreditPurchase}
-            disabled={purchasing}
-            className="rounded-md bg-orange-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
+          <Link
+            href="/plan"
+            className="rounded-md bg-orange-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-orange-700 transition-colors"
           >
-            {purchasing ? '処理中...' : 'クレジットを購入（¥600/回）'}
-          </button>
+            クレジットを購入（¥600/回）
+          </Link>
         )}
       </div>
     )
