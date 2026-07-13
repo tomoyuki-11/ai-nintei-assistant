@@ -152,7 +152,7 @@ export default function SettingsPage() {
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       required
                       placeholder="現在のパスワード"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <input
                       type="password"
@@ -161,7 +161,7 @@ export default function SettingsPage() {
                       required
                       placeholder="新しいパスワード（6文字以上）"
                       minLength={6}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <input
                       type="password"
@@ -169,7 +169,7 @@ export default function SettingsPage() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
                       placeholder="新しいパスワード（確認）"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     {passwordError && <p className="text-xs text-red-600">{passwordError}</p>}
                     <button
