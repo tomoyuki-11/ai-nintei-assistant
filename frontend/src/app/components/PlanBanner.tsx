@@ -80,6 +80,7 @@ export default function PlanBanner() {
           <span className="font-medium">トライアル期間が終了しました。プランを選択してください。</span>
           <Link
             href="/plan"
+            onClick={() => localStorage.setItem('plan_entry_path', window.location.pathname)}
             className="rounded-md bg-red-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-red-700 transition-colors"
           >
             プラン変更
@@ -116,6 +117,7 @@ export default function PlanBanner() {
           {isIndividual ? (
             <Link
               href="/plan"
+              onClick={() => localStorage.setItem('plan_entry_path', window.location.pathname)}
               className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium transition-colors ${
                 isWarning ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'
               }`}
@@ -152,6 +154,7 @@ export default function PlanBanner() {
         </span>
         <Link
           href="/plan"
+          onClick={() => localStorage.setItem('plan_entry_path', window.location.pathname)}
           className={`rounded-md px-2.5 py-0.5 text-xs text-white font-medium transition-colors ${
             noCredits ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-600 hover:bg-gray-700'
           }`}
@@ -179,6 +182,7 @@ export default function PlanBanner() {
         {status.is_limit_reached && (
           <Link
             href="/plan"
+            onClick={() => localStorage.setItem('plan_entry_path', window.location.pathname)}
             className="rounded-md bg-orange-600 px-2.5 py-0.5 text-xs text-white font-medium hover:bg-orange-700 transition-colors"
           >
             クレジットを購入（¥600/回）

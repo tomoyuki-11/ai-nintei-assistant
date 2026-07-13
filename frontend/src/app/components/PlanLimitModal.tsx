@@ -52,7 +52,10 @@ export default function PlanLimitModal({ limitPlan, onClose }: Props) {
           {isIndividual && (
             <Link
               href="/plan"
-              onClick={onClose}
+              onClick={() => {
+                localStorage.setItem('plan_entry_path', window.location.pathname)
+                onClose()
+              }}
               className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 transition-colors text-center"
             >
               プラン変更ページへ

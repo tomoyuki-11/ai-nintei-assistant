@@ -52,7 +52,9 @@ export default function PlanPage() {
 
   async function handleStripe(type: 'monthly' | 'credit' | 'portal') {
     if (type !== 'portal') {
-      localStorage.setItem('stripe_return_path', window.location.pathname)
+      const entryPath = localStorage.getItem('plan_entry_path')
+      localStorage.removeItem('plan_entry_path')
+      localStorage.setItem('stripe_return_path', entryPath || window.location.pathname)
     }
     setLoading(type)
     setError('')
