@@ -1344,7 +1344,9 @@ async fn stripe_webhook_handler(
                             db::upgrade_org_to_monthly(&state.db, org_id, &customer_id, &subscription_id)
                                 .await
                                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                            tracing::info!("Org {} → monthly プランに更新", org_id_str);
+                            let year_month = Utc::now().format("%Y-%m").to_string();
+                            let _ = db::reset_monthly_usage(&state.db, org_id, &year_month).await;
+                            tracing::info!("Org {} → monthly プランに更新・今月の使用回数をリセット", org_id_str);
                         }
                         "payment" => {
                             let credits: i32 = metadata["credits"]

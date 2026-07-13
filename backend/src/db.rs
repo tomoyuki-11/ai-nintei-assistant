@@ -432,6 +432,17 @@ pub async fn upgrade_org_to_monthly(
     Ok(())
 }
 
+pub async fn reset_monthly_usage(pool: &PgPool, org_id: Uuid, year_month: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "DELETE FROM usage_counts WHERE organization_id = $1 AND year_month = $2",
+    )
+    .bind(org_id)
+    .bind(year_month)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn get_stripe_customer_id(pool: &PgPool, org_id: Uuid) -> Result<Option<String>, sqlx::Error> {
     let row: Option<(Option<String>,)> = sqlx::query_as(
         "SELECT stripe_customer_id FROM organizations WHERE id = $1",
