@@ -159,7 +159,33 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-gray-900 mb-3">8. 情報の利用目的</h2>
+            <h2 className="text-base font-semibold text-gray-900 mb-3">8. AIの学習への利用について</h2>
+            <p className="mb-3">
+              本サービスを通じて送信された音声データ・文字起こしテキスト・調査記録は、<strong>AIモデルの学習・訓練には使用されません</strong>。
+            </p>
+            <ul className="list-disc list-inside space-y-2 pl-2 mb-3">
+              <li>
+                <span className="font-medium">運営者：</span>
+                収集したデータをAIの学習目的で使用することはありません。
+              </li>
+              <li>
+                <span className="font-medium">OpenAI（Whisper API）：</span>
+                2023年3月1日以降、API経由で送信されたデータはモデルの学習・改善には使用されないことが
+                <a href="https://developers.openai.com/api/docs/guides/your-data" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">公式ドキュメント</a>
+                で明記されています。
+              </li>
+              <li>
+                <span className="font-medium">Anthropic（Claude API）：</span>
+                APIの利用規約（Commercial Terms）において「顧客コンテンツをモデルの学習に使用しない」ことが明記されています。
+              </li>
+            </ul>
+            <p className="text-xs text-gray-500">
+              ※ 上記は各社のポリシーに基づく記載です。各社のポリシー変更により取り扱いが変わる場合があります。最新情報は各社の利用規約・プライバシーポリシーをご確認ください。
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-gray-900 mb-3">9. 情報の利用目的</h2>
             <p className="mb-2">収集した情報は以下の目的にのみ利用します。</p>
             <ul className="list-disc list-inside space-y-1 pl-2">
               <li>本サービスの提供・維持・改善</li>
@@ -174,7 +200,7 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-gray-900 mb-3">9. ユーザーの権利</h2>
+            <h2 className="text-base font-semibold text-gray-900 mb-3">10. ユーザーの権利</h2>
             <p className="mb-2">ユーザーは以下の権利を有します。</p>
             <ul className="list-disc list-inside space-y-1 pl-2">
               <li>保存された調査記録を履歴画面から確認・削除する権利</li>
@@ -187,21 +213,21 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-gray-900 mb-3">10. 未成年者の利用</h2>
+            <h2 className="text-base font-semibold text-gray-900 mb-3">11. 未成年者の利用</h2>
             <p>
               本サービスは、18歳以上の方を対象としています。18歳未満の方がご利用になる場合は、保護者の同意を得てください。
             </p>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-gray-900 mb-3">11. 本ポリシーの変更</h2>
+            <h2 className="text-base font-semibold text-gray-900 mb-3">12. 本ポリシーの変更</h2>
             <p>
               本ポリシーの内容は、法令の改正やサービスの変更等に応じて予告なく変更する場合があります。重要な変更を行う場合は、サービス内でお知らせします。変更後も本サービスを継続してご利用いただいた場合は、変更後のポリシーに同意したものとみなします。
             </p>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-gray-900 mb-3">12. お問い合わせ</h2>
+            <h2 className="text-base font-semibold text-gray-900 mb-3">13. お問い合わせ</h2>
             <p className="mb-2">
               個人情報の取り扱いに関するご質問・ご要望は、以下までご連絡ください。
             </p>
