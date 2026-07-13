@@ -39,6 +39,7 @@ export default function RecordPage() {
   const [showDownloadHint, setShowDownloadHint] = useState(false)
   const [downloadHintDontShow, setDownloadHintDontShow] = useState(false)
   const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
+  const [isPageHidden, setIsPageHidden] = useState(false)
   const savedIdRef = useRef<string | null>(null)
   const recordedThisSessionRef = useRef(false)
 
@@ -58,10 +59,29 @@ export default function RecordPage() {
 
   useEffect(() => {
     if (!isRecording) { setRecordingSeconds(0); return }
-    if (isPaused) return
+    if (isPaused || isPageHidden) return
     const id = setInterval(() => setRecordingSeconds((s) => s + 1), 1000)
     return () => clearInterval(id)
-  }, [isRecording, isPaused])
+  }, [isRecording, isPaused, isPageHidden])
+
+  // 電話着信などでバックグラウンドになったとき録音・タイマーを自動停止、復帰時に再開
+  useEffect(() => {
+    if (!isRecording) return
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        setIsPageHidden(true)
+        pauseRecording()
+      } else {
+        setIsPageHidden(false)
+        resumeRecording()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      setIsPageHidden(false)
+    }
+  }, [isRecording, pauseRecording, resumeRecording])
 
   useEffect(() => {
     if (!isRecording) return
@@ -265,9 +285,9 @@ export default function RecordPage() {
             )
           })()}
           <div className="flex items-center justify-center mb-14">
-            <div className={`w-5 h-5 rounded-full transition-colors duration-300 ${isPaused ? 'bg-gray-600' : 'bg-red-500 animate-pulse'}`} />
+            <div className={`w-5 h-5 rounded-full transition-colors duration-300 ${isPaused || isPageHidden ? 'bg-gray-600' : 'bg-red-500 animate-pulse'}`} />
           </div>
-          <p className="text-gray-500 text-sm mb-14">{isPaused ? '一時停止中' : '録音中'}</p>
+          <p className="text-gray-500 text-sm mb-14">{isPaused || isPageHidden ? '一時停止中' : '録音中'}</p>
           <div className="flex gap-10 items-center">
             <button onClick={handleStopRecording} className="w-14 h-14 rounded-full bg-gray-800 flex items-center justify-center active:bg-gray-700 transition-colors">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="2" fill="white" /></svg>
@@ -283,8 +303,12 @@ export default function RecordPage() {
               )}
             </button>
           </div>
-          {showScreenWarning && !isPaused && (
-            <p className="text-gray-500 text-lg mt-12">画面をオンのままにしてください</p>
+          {isPageHidden ? (
+            <p className="text-gray-500 text-sm mt-12">電話終了後に自動で再開します</p>
+          ) : (
+            showScreenWarning && !isPaused && (
+              <p className="text-gray-500 text-lg mt-12">画面をオンのままにしてください</p>
+            )
           )}
           <p className="text-gray-700 text-xs mt-4">録音が完了するまで画面を閉じたり、再読み込みしないでください</p>
         </div>
