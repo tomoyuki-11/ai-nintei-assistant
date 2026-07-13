@@ -83,6 +83,13 @@ export default function IndividualRegisterPage() {
               />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
+            <p className="text-xs text-gray-400">
+              登録することで{' '}
+              <Link href="/privacy" className="text-blue-500 hover:underline" target="_blank">
+                プライバシーポリシー
+              </Link>
+              に同意したものとみなします。
+            </p>
             <button
               type="submit"
               disabled={loading}
