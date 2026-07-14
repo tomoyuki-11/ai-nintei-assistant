@@ -166,7 +166,7 @@ export default function SettingsPage() {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
               {[
                 { label: '利用規約', href: 'https://lp.ai-nintei-assistant.com/terms' },
-                { label: 'プライバシーポリシー', href: 'https://lp.ai-nintei-assistant.com/privacypolicy' },
+                { label: 'プライバシーポリシー', href: 'https://lp.ai-nintei-assistant.com/privacy' },
                 { label: '特定商取引法に基づく表記', href: 'https://lp.ai-nintei-assistant.com/tokushoho' },
               ].map(({ label, href }) => (
                 <a

@@ -138,7 +138,7 @@ function RegisterForm() {
             {error && <p className="text-sm text-red-600">{error}</p>}
             <p className="text-xs text-gray-400">
               登録することで{' '}
-              <Link href="/privacy" className="text-blue-500 hover:underline" target="_blank">
+              <Link href="https://lp.ai-nintei-assistant.com/privacy" className="text-blue-500 hover:underline" target="_blank">
                 プライバシーポリシー
               </Link>
               に同意したものとみなします。
