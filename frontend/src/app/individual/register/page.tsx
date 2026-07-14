@@ -1,14 +1,24 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { isAuthenticated, setToken } from '@/lib/auth'
+import { isAuthenticated, setToken, authHeaders } from '@/lib/auth'
 
 const API = process.env.NEXT_PUBLIC_API_URL
 
-export default function IndividualRegisterPage() {
+async function completeOnboarding() {
+  await fetch(`${API}/api/individual/complete-onboarding`, {
+    method: 'POST',
+    headers: authHeaders(),
+  }).catch(() => {})
+}
+
+function RegisterForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const plan = searchParams.get('plan') // 'trial' | 'monthly' | 'metered' | null
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -17,6 +27,26 @@ export default function IndividualRegisterPage() {
   useEffect(() => {
     if (isAuthenticated()) router.replace('/')
   }, [router])
+
+  async function redirectToStripe(type: 'monthly' | 'credit'): Promise<string | null> {
+    const endpoint = type === 'monthly'
+      ? '/api/stripe/create-checkout-session'
+      : '/api/stripe/create-credit-checkout'
+    localStorage.setItem('stripe_return_path', '/')
+    try {
+      const res = await fetch(`${API}${endpoint}`, {
+        method: 'POST',
+        headers: authHeaders(),
+      })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      await completeOnboarding()
+      return data.url
+    } catch {
+      localStorage.removeItem('stripe_return_path')
+      return null
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -31,6 +61,30 @@ export default function IndividualRegisterPage() {
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
       setToken(data.token)
+
+      if (plan === 'monthly') {
+        const url = await redirectToStripe('monthly')
+        if (url) { window.location.href = url; return }
+        setError('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
+        setLoading(false)
+        return
+      }
+
+      if (plan === 'metered') {
+        const url = await redirectToStripe('credit')
+        if (url) { window.location.href = url; return }
+        setError('決済ページへの移動に失敗しました。しばらくしてからお試しください。')
+        setLoading(false)
+        return
+      }
+
+      if (plan === 'trial') {
+        await completeOnboarding()
+        router.push('/')
+        return
+      }
+
+      // パラメータなし：既存フロー
       router.push(data.is_first_login ? '/individual/plan-select' : '/')
     } catch (e) {
       const msg = e instanceof Error ? e.message : ''
@@ -39,7 +93,6 @@ export default function IndividualRegisterPage() {
           ? 'サーバーに接続できませんでした。しばらくしてからお試しください。'
           : msg
       )
-    } finally {
       setLoading(false)
     }
   }
@@ -95,7 +148,7 @@ export default function IndividualRegisterPage() {
               disabled={loading}
               className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              {loading ? '登録中...' : '無料で登録する'}
+              {loading ? '処理中...' : '無料で登録する'}
             </button>
           </form>
 
@@ -116,5 +169,13 @@ export default function IndividualRegisterPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function IndividualRegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
   )
 }
