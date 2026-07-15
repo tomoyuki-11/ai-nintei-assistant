@@ -416,7 +416,7 @@ export default function SuperAdminPage() {
         </button>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8">
         {/* タブ */}
         <div className="flex gap-1 mb-6 border-b border-gray-300">
           <button
@@ -504,7 +504,7 @@ export default function SuperAdminPage() {
                                 className="border border-gray-400 bg-gray-200 hover:bg-gray-300 active:bg-gray-400 px-3 py-1 text-xs font-bold text-gray-800 disabled:opacity-40"
                                 style={{ borderRadius: 0 }}
                               >
-                                {planSaving[user.id] ? '...' : '変更'}
+                                <span className="whitespace-nowrap">{planSaving[user.id] ? '...' : '変更'}</span>
                               </button>
                             </div>
                             {planMessages[user.id] && (
@@ -531,7 +531,7 @@ export default function SuperAdminPage() {
                                 className="border border-gray-400 bg-gray-200 hover:bg-gray-300 active:bg-gray-400 px-3 py-1 text-xs font-bold text-gray-800 disabled:opacity-50"
                                 style={{ borderRadius: 0 }}
                               >
-                                {creditAdding[user.id] ? '...' : '追加'}
+                                <span className="whitespace-nowrap">{creditAdding[user.id] ? '...' : '追加'}</span>
                               </button>
                             </div>
                             {creditMessages[user.id] && (
