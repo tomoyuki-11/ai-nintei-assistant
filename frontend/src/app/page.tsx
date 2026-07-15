@@ -247,7 +247,7 @@ export default function HomePage() {
 
                   {/* 音声ダウンロード */}
                   {item.audio_path && (
-                    <div className={`px-4 py-3 flex items-center gap-3${item.formatted ? ' border-t border-gray-100' : ''}`}>
+                    <div className={`px-4 py-3${item.formatted ? ' border-t border-gray-100' : ''}`}>
                       <button
                         onClick={async () => {
                           try {
@@ -271,7 +271,6 @@ export default function HomePage() {
                         }}
                         className="rounded-lg bg-gray-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-gray-700 transition-colors"
                       >音声をダウンロード</button>
-                      <span className="text-xs text-gray-400">作成から5日間</span>
                     </div>
                   )}
                 </div>
