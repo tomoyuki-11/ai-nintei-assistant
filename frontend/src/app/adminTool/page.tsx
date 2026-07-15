@@ -171,7 +171,6 @@ export default function SuperAdminPage() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setSuperAdminToken(data.token);
-      setIsLoggedIn(true);
       loadOrgs();
     } catch (e) {
       setLoginError(e instanceof Error ? e.message : "ログインに失敗しました");
