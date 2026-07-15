@@ -488,18 +488,19 @@ export default function SuperAdminPage() {
                           <td className="px-4 py-2 border-r border-gray-200">
                             <div className="flex items-center gap-2">
                               <select
-                                value={planSelects[user.id] ?? user.plan}
+                                value={planSelects[user.id] ?? ''}
                                 onChange={(e) => setPlanSelects((prev) => ({ ...prev, [user.id]: e.target.value }))}
                                 className="border border-gray-400 px-2 py-1 text-xs bg-white text-gray-900 focus:outline-none focus:border-gray-600"
                                 style={{ borderRadius: 0 }}
                               >
+                                <option value="" disabled>-- 選択 --</option>
                                 <option value="trial">開発者用（トライアル）</option>
                                 <option value="metered">開発者用（従量課金）</option>
                                 <option value="monthly">開発者用（スタンダード）</option>
                               </select>
                               <button
                                 onClick={() => handleChangePlan(user.id, user.plan)}
-                                disabled={planSaving[user.id] || (planSelects[user.id] ?? user.plan) === user.plan}
+                                disabled={planSaving[user.id] || !planSelects[user.id] || planSelects[user.id] === user.plan}
                                 className="border border-gray-400 bg-gray-200 hover:bg-gray-300 active:bg-gray-400 px-3 py-1 text-xs font-bold text-gray-800 disabled:opacity-40"
                                 style={{ borderRadius: 0 }}
                               >
