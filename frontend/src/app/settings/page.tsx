@@ -160,31 +160,6 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* ── 法的情報 ─────────────────────────────────── */}
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">法的情報</p>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
-              {[
-                { label: '利用規約', href: 'https://lp.ai-nintei-assistant.com/terms' },
-                { label: 'プライバシーポリシー', href: 'https://lp.ai-nintei-assistant.com/privacy' },
-                { label: '特定商取引法に基づく表記', href: 'https://lp.ai-nintei-assistant.com/tokushoho' },
-              ].map(({ label, href }) => (
-                <a
-                  key={label}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between px-5 py-4 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  <span>{label}</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </a>
-              ))}
-            </div>
-          </section>
-
           {/* ── アプリ情報 ───────────────────────────────── */}
           <section>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">アプリ情報</p>

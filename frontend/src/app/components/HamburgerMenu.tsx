@@ -95,6 +95,15 @@ export default function HamburgerMenu() {
           >
             設定
           </Link>
+          <a
+            href="https://lp.ai-nintei-assistant.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            公式サイト
+          </a>
           <div className="border-t border-gray-100 my-1" />
           <button
             onClick={handleLogout}
