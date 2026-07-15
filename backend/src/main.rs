@@ -32,6 +32,7 @@ pub struct AppState {
     pub stripe_individual_credit_price_id: String,
     pub http_client: reqwest::Client,
     pub openai_api_key: String,
+    pub audio_storage_path: String,
 }
 
 // ─── Request / Response types ─────────────────────────────────────────────────
@@ -127,6 +128,7 @@ struct AuthResponse {
 #[derive(Deserialize)]
 struct SaveRequest {
     text: String,
+    audio_path: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -158,6 +160,7 @@ struct SaveResultRequest {
     formatted: String,
     id: Option<String>,
     save_text: Option<bool>,
+    audio_path: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -217,9 +220,14 @@ async fn main() {
         .unwrap_or_else(|_| stripe_individual_price_id.clone());
     let stripe_credit_price_id = std::env::var("STRIPE_CREDIT_PRICE_ID")
         .unwrap_or_else(|_| stripe_individual_credit_price_id.clone());
+    let audio_storage_path = std::env::var("AUDIO_STORAGE_PATH")
+        .unwrap_or_else(|_| "./audio_storage".to_string());
+    std::fs::create_dir_all(&audio_storage_path)
+        .expect("Failed to create audio storage directory");
 
     tracing::info!("DATABASE_URL: {}", database_url);
     tracing::info!("ANTHROPIC_API_KEY: set");
+    tracing::info!("AUDIO_STORAGE_PATH: {}", audio_storage_path);
 
     let pool = PgPool::connect(&database_url)
         .await
@@ -234,12 +242,19 @@ async fn main() {
 
     // 整形完了から5日後に自動削除するバックグラウンドタスク
     let cleanup_pool = pool.clone();
+    let cleanup_audio_path = audio_storage_path.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
         loop {
             interval.tick().await;
             match db::delete_excel_expired_records(&cleanup_pool).await {
-                Ok(n) if n > 0 => tracing::info!("自動削除: {}件の整形済みレコードを削除しました", n),
+                Ok((n, audio_paths)) if n > 0 => {
+                    tracing::info!("自動削除: {}件の整形済みレコードを削除しました", n);
+                    for filename in audio_paths {
+                        let full_path = format!("{}/{}", cleanup_audio_path, filename);
+                        let _ = tokio::fs::remove_file(&full_path).await;
+                    }
+                }
                 Err(e) => tracing::error!("自動削除エラー: {}", e),
                 _ => {}
             }
@@ -259,6 +274,7 @@ async fn main() {
         stripe_individual_credit_price_id,
         http_client: reqwest::Client::new(),
         openai_api_key,
+        audio_storage_path,
     };
 
     let frontend_url = std::env::var("FRONTEND_URL")
@@ -312,6 +328,7 @@ async fn main() {
             "/api/history/{id}",
             axum::routing::put(update_text_handler).delete(delete_handler),
         )
+        .route("/api/history/{id}/audio", get(download_audio_handler))
         .route("/api/history/{id}/text", axum::routing::delete(delete_text_handler))
         .route("/api/history/{id}/formatted", axum::routing::delete(delete_formatted_handler))
         .route("/api/history/{id}/mark-downloaded", post(mark_downloaded_handler))
@@ -405,6 +422,21 @@ async fn transcribe_handler(
 
     tracing::info!("Whisper送信: filename={}, whisper_mime={}", filename, whisper_mime);
 
+    // 音声ファイルをディスクに保存（5日間ダウンロード可能にするため）
+    let audio_uuid = Uuid::new_v4();
+    let audio_filename = format!("{}.{}", audio_uuid, ext);
+    let audio_save_path = format!("{}/{}", state.audio_storage_path, audio_filename);
+    let saved_audio_path: Option<String> = match tokio::fs::write(&audio_save_path, &audio_data).await {
+        Ok(_) => {
+            tracing::info!("音声ファイル保存: {}", audio_filename);
+            Some(audio_filename)
+        }
+        Err(e) => {
+            tracing::warn!("音声ファイル保存エラー: {}", e);
+            None
+        }
+    };
+
     let part = reqwest::multipart::Part::bytes(audio_data)
         .file_name(filename)
         .mime_str(whisper_mime)
@@ -434,7 +466,7 @@ async fn transcribe_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     tracing::info!("Whisper 成功");
-    Ok(Json(serde_json::json!({ "text": data["text"] })))
+    Ok(Json(serde_json::json!({ "text": data["text"], "audio_path": saved_audio_path })))
 }
 
 // ─── ヘルス ───────────────────────────────────────────────────────────────────
@@ -1036,11 +1068,11 @@ async fn save_result_handler(
         }
         None => {
             if body.save_text.unwrap_or(true) {
-                db::save_transcription(&state.db, &body.text, &body.formatted, auth.organization_id, &auth.name)
+                db::save_transcription(&state.db, &body.text, &body.formatted, auth.organization_id, &auth.name, body.audio_path.as_deref())
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             } else {
-                db::save_formatted_only(&state.db, &body.formatted, auth.organization_id, &auth.name)
+                db::save_formatted_only(&state.db, &body.formatted, auth.organization_id, &auth.name, body.audio_path.as_deref())
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
@@ -1054,7 +1086,7 @@ async fn save_transcription_handler(
     auth: AuthUser,
     Json(body): Json<SaveRequest>,
 ) -> Result<Json<SaveResponse>, (StatusCode, String)> {
-    let id = db::save_text_only(&state.db, &body.text, auth.organization_id, &auth.name)
+    let id = db::save_text_only(&state.db, &body.text, auth.organization_id, &auth.name, body.audio_path.as_deref())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(SaveResponse { id: id.to_string() }))
@@ -1152,10 +1184,53 @@ async fn delete_handler(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    db::delete_transcription(&state.db, id, auth.organization_id)
+    let audio_filename = db::delete_transcription(&state.db, id, auth.organization_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if let Some(filename) = audio_filename {
+        let full_path = format!("{}/{}", state.audio_storage_path, filename);
+        let _ = tokio::fs::remove_file(&full_path).await;
+    }
     Ok(StatusCode::OK)
+}
+
+async fn download_audio_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<axum::response::Response, (StatusCode, String)> {
+    let audio_filename = db::get_audio_path(&state.db, id, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "音声ファイルが見つかりません".to_string()))?;
+
+    let full_path = format!("{}/{}", state.audio_storage_path, audio_filename);
+    let data = tokio::fs::read(&full_path)
+        .await
+        .map_err(|_| (StatusCode::NOT_FOUND, "音声ファイルが見つかりません".to_string()))?;
+
+    let ext = std::path::Path::new(&audio_filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("webm");
+    let content_type = match ext {
+        "ogg" => "audio/ogg",
+        "flac" => "audio/flac",
+        "m4a" | "mp4" => "audio/mp4",
+        "mp3" | "mpeg" => "audio/mpeg",
+        "wav" => "audio/wav",
+        _ => "audio/webm",
+    };
+
+    axum::response::Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, content_type)
+        .header(
+            axum::http::header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"audio_{}.{}\"", id, ext),
+        )
+        .body(axum::body::Body::from(data))
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
 async fn delete_text_handler(

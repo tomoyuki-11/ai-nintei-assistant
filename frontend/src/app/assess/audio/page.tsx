@@ -136,10 +136,12 @@ export default function AudioPage() {
       clearUploadFile()
       setText('')
       // 保存・課金（クライアントが結果を受け取った後に実行）
+      const audioPath = localStorage.getItem('last_audio_path')
+      if (audioPath) localStorage.removeItem('last_audio_path')
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ text: transcribedText, formatted: data.formatted, save_text: false }),
+        body: JSON.stringify({ text: transcribedText, formatted: data.formatted, save_text: false, ...(audioPath ? { audio_path: audioPath } : {}) }),
       }).catch(() => {})
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {

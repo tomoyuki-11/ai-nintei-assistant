@@ -236,6 +236,7 @@ pub struct Transcription {
     pub formatted: Option<String>,
     pub user_name: String,
     pub created_at: DateTime<Utc>,
+    pub audio_path: Option<String>,
 }
 
 pub async fn save_text_only(
@@ -243,13 +244,15 @@ pub async fn save_text_only(
     text: &str,
     org_id: Uuid,
     user_name: &str,
+    audio_path: Option<&str>,
 ) -> Result<Uuid, sqlx::Error> {
     let row: (Uuid,) = sqlx::query_as(
-        "INSERT INTO transcriptions (text, organization_id, user_name) VALUES ($1, $2, $3) RETURNING id",
+        "INSERT INTO transcriptions (text, organization_id, user_name, audio_path) VALUES ($1, $2, $3, $4) RETURNING id",
     )
     .bind(text)
     .bind(org_id)
     .bind(user_name)
+    .bind(audio_path)
     .fetch_one(pool)
     .await?;
     Ok(row.0)
@@ -261,14 +264,16 @@ pub async fn save_transcription(
     formatted: &str,
     org_id: Uuid,
     user_name: &str,
+    audio_path: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO transcriptions (text, formatted, organization_id, user_name) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO transcriptions (text, formatted, organization_id, user_name, audio_path) VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(text)
     .bind(formatted)
     .bind(org_id)
     .bind(user_name)
+    .bind(audio_path)
     .execute(pool)
     .await?;
     Ok(())
@@ -279,13 +284,15 @@ pub async fn save_formatted_only(
     formatted: &str,
     org_id: Uuid,
     user_name: &str,
+    audio_path: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO transcriptions (text, formatted, organization_id, user_name) VALUES (NULL, $1, $2, $3)",
+        "INSERT INTO transcriptions (text, formatted, organization_id, user_name, audio_path) VALUES (NULL, $1, $2, $3, $4)",
     )
     .bind(formatted)
     .bind(org_id)
     .bind(user_name)
+    .bind(audio_path)
     .execute(pool)
     .await?;
     Ok(())
@@ -347,13 +354,30 @@ pub async fn delete_transcription(
     pool: &PgPool,
     id: Uuid,
     org_id: Uuid,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM transcriptions WHERE id = $1 AND organization_id = $2")
-        .bind(id)
-        .bind(org_id)
-        .execute(pool)
-        .await?;
-    Ok(())
+) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(Option<String>,)> = sqlx::query_as(
+        "DELETE FROM transcriptions WHERE id = $1 AND organization_id = $2 RETURNING audio_path",
+    )
+    .bind(id)
+    .bind(org_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.and_then(|(p,)| p))
+}
+
+pub async fn get_audio_path(
+    pool: &PgPool,
+    id: Uuid,
+    org_id: Uuid,
+) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(Option<String>,)> = sqlx::query_as(
+        "SELECT audio_path FROM transcriptions WHERE id = $1 AND organization_id = $2",
+    )
+    .bind(id)
+    .bind(org_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.and_then(|(p,)| p))
 }
 
 // ─── Usage counts ─────────────────────────────────────────────────────────────
@@ -614,7 +638,7 @@ pub async fn list_transcriptions(
     org_id: Uuid,
 ) -> Result<Vec<Transcription>, sqlx::Error> {
     sqlx::query_as::<_, Transcription>(
-        "SELECT id, text, formatted, user_name, created_at
+        "SELECT id, text, formatted, user_name, created_at, audio_path
          FROM transcriptions
          WHERE organization_id = $1
          ORDER BY created_at DESC
@@ -640,13 +664,16 @@ pub async fn mark_excel_downloaded(
     Ok(())
 }
 
-pub async fn delete_excel_expired_records(pool: &PgPool) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query(
+pub async fn delete_excel_expired_records(pool: &PgPool) -> Result<(u64, Vec<String>), sqlx::Error> {
+    let rows: Vec<(Option<String>,)> = sqlx::query_as(
         "DELETE FROM transcriptions
          WHERE formatted IS NOT NULL
-           AND created_at < NOW() - INTERVAL '5 days'",
+           AND created_at < NOW() - INTERVAL '5 days'
+         RETURNING audio_path",
     )
-    .execute(pool)
+    .fetch_all(pool)
     .await?;
-    Ok(result.rows_affected())
+    let count = rows.len() as u64;
+    let audio_paths: Vec<String> = rows.into_iter().filter_map(|(p,)| p).collect();
+    Ok((count, audio_paths))
 }

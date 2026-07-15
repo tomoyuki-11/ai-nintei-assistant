@@ -152,10 +152,12 @@ export default function RecordPage() {
 
   async function saveTranscription(text: string): Promise<string | null> {
     try {
+      const audioPath = localStorage.getItem('last_audio_path')
+      if (audioPath) localStorage.removeItem('last_audio_path')
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/transcription`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, ...(audioPath ? { audio_path: audioPath } : {}) }),
       })
       if (res.ok) return (await res.json()).id
     } catch {}

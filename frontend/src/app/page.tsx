@@ -12,6 +12,7 @@ type Transcription = {
   formatted: string | null
   user_name: string
   created_at: string
+  audio_path: string | null
 }
 
 function formatDate(iso: string): string {
@@ -241,6 +242,36 @@ export default function HomePage() {
                           {item.formatted}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* 音声ダウンロード */}
+                  {item.audio_path && (
+                    <div className={`px-4 py-3 flex items-center gap-3${item.formatted ? ' border-t border-gray-100' : ''}`}>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${item.id}/audio`, {
+                              headers: authHeaders(),
+                            })
+                            if (!res.ok) { alert('音声ファイルが見つかりません'); return }
+                            const blob = await res.blob()
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            const ext = item.audio_path?.split('.').pop() ?? 'webm'
+                            a.href = url
+                            a.download = `録音_${formatDate(item.created_at)}.${ext}`
+                            document.body.appendChild(a)
+                            a.click()
+                            document.body.removeChild(a)
+                            URL.revokeObjectURL(url)
+                          } catch {
+                            alert('ダウンロードに失敗しました')
+                          }
+                        }}
+                        className="rounded-lg bg-gray-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-gray-700 transition-colors"
+                      >音声をダウンロード</button>
+                      <span className="text-xs text-gray-400">作成から5日間</span>
                     </div>
                   )}
                 </div>

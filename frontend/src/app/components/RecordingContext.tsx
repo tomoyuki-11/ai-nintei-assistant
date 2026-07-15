@@ -412,6 +412,12 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
       const data = JSON.parse(responseText)
       const transcribed = data.text || ''
+      // audio_path をローカルストレージに保存し、後続の保存処理で参照できるようにする
+      if (data.audio_path) {
+        localStorage.setItem('last_audio_path', data.audio_path)
+      } else {
+        localStorage.removeItem('last_audio_path')
+      }
       if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
         return ''
       }
