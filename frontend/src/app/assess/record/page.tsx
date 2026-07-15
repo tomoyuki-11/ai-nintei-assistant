@@ -37,9 +37,7 @@ export default function RecordPage() {
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [showAutoLockModal, setShowAutoLockModal] = useState(false)
   const [autoLockDontShow, setAutoLockDontShow] = useState(false)
-  const [showDownloadHint, setShowDownloadHint] = useState(false)
-  const [downloadHintDontShow, setDownloadHintDontShow] = useState(false)
-  const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
+const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
   const [isPageHidden, setIsPageHidden] = useState(false)
   const savedIdRef = useRef<string | null>(null)
   const recordedThisSessionRef = useRef(false)
@@ -109,14 +107,7 @@ export default function RecordPage() {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [isRecording])
 
-  useEffect(() => {
-    if (result && downloadableAudio && recordedThisSessionRef.current && !localStorage.getItem('audioDownloadHintDismissed')) {
-      setDownloadHintDontShow(false)
-      setShowDownloadHint(true)
-    }
-  }, [result])
-
-  useEffect(() => {
+useEffect(() => {
     if (recordingError) { setError(recordingError); setRecordingError('') }
   }, [recordingError, setRecordingError])
 
@@ -364,32 +355,7 @@ export default function RecordPage() {
         </div>
       )}
 
-      {/* 音声ダウンロードヒントモーダル */}
-      {showDownloadHint && downloadableAudio && (() => {
-        const ext = getExtFromMime(downloadableAudio.type)
-        return (
-          <div className="fixed inset-x-4 bottom-8 z-50 flex justify-center">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-80">
-              <p className="text-sm font-semibold text-gray-900 mb-3">録音音声について</p>
-              <p className="text-sm text-gray-600 mb-3">音声のダウンロードは任意です。整形はすでに完了しています。このページを閉じると音声はダウンロードできなくなります。</p>
-              <p className="text-xs bg-gray-100 rounded-lg px-3 py-2 text-gray-600 mb-4">
-                形式：<span className="font-medium">.{ext}</span>
-                {ext === 'webm' && <span className="block mt-0.5">※ macOS標準では開けません。VLC などのプレーヤーをお使いください。</span>}
-              </p>
-              <label className="flex items-center gap-2 text-xs text-gray-500 mb-5 cursor-pointer">
-                <input type="checkbox" checked={downloadHintDontShow} onChange={(e) => setDownloadHintDontShow(e.target.checked)} className="rounded" />
-                次回から表示しない
-              </label>
-              <div className="flex gap-3">
-                <button onClick={() => { if (downloadHintDontShow) localStorage.setItem('audioDownloadHintDismissed', '1'); setShowDownloadHint(false) }} className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">閉じる</button>
-                <button onClick={() => { if (downloadHintDontShow) localStorage.setItem('audioDownloadHintDismissed', '1'); setShowDownloadHint(false); downloadAudio() }} className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium hover:bg-blue-700 transition-colors">ダウンロード</button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
-      <div className="max-w-3xl mx-auto px-4 py-6">
+<div className="max-w-3xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-bold text-gray-900">録音して整形</h1>
           {isBusy ? (
