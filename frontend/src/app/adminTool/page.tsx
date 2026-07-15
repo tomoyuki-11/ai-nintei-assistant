@@ -127,6 +127,7 @@ export default function SuperAdminPage() {
   useEffect(() => {
     if (getSuperAdminToken()) {
       loadOrgs();
+      loadIndividualUsers();
     } else {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setMounted(true);
