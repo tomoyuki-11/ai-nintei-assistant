@@ -120,6 +120,9 @@ export default function SuperAdminPage() {
   const [creditInputs, setCreditInputs] = useState<Record<string, string>>({});
   const [creditAdding, setCreditAdding] = useState<Record<string, boolean>>({});
   const [creditMessages, setCreditMessages] = useState<Record<string, string>>({});
+  const [planSelects, setPlanSelects] = useState<Record<string, string>>({});
+  const [planSaving, setPlanSaving] = useState<Record<string, boolean>>({});
+  const [planMessages, setPlanMessages] = useState<Record<string, string>>({});
 
   function copyLicenseKey(orgId: string, key: string) {
     navigator.clipboard.writeText(key);
@@ -160,6 +163,30 @@ export default function SuperAdminPage() {
       setIndividualError(e instanceof Error ? e.message : 'データの取得に失敗しました');
     } finally {
       setIndividualLoading(false);
+    }
+  }
+
+  async function handleChangePlan(userId: string, currentPlan: string) {
+    const plan = planSelects[userId] ?? currentPlan;
+    if (plan === currentPlan) return;
+    setPlanSaving((prev) => ({ ...prev, [userId]: true }));
+    setPlanMessages((prev) => ({ ...prev, [userId]: '' }));
+    try {
+      const res = await fetch(`${API}/api/adminTool/individual-users/${userId}/change-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...superAdminHeaders() },
+        body: JSON.stringify({ plan }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setPlanMessages((prev) => ({ ...prev, [userId]: 'プランを変更しました' }));
+      setTimeout(() => setPlanMessages((prev) => ({ ...prev, [userId]: '' })), 3000);
+      setIndividualUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, plan } : u))
+      );
+    } catch (e) {
+      setPlanMessages((prev) => ({ ...prev, [userId]: e instanceof Error ? e.message : '失敗しました' }));
+    } finally {
+      setPlanSaving((prev) => ({ ...prev, [userId]: false }));
     }
   }
 
@@ -442,6 +469,7 @@ export default function SuperAdminPage() {
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">残クレジット</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">トライアル期限</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">登録日</th>
+                        <th className="text-left px-4 py-2 font-bold border-r border-gray-300">プラン変更</th>
                         <th className="text-left px-4 py-2 font-bold">クレジット追加</th>
                       </tr>
                     </thead>
@@ -457,6 +485,34 @@ export default function SuperAdminPage() {
                           <td className="px-4 py-2 text-gray-900 font-bold text-sm border-r border-gray-200">{user.credits}回</td>
                           <td className="px-4 py-2 text-xs text-gray-600 border-r border-gray-200">{formatDate(user.license_expires_at)}</td>
                           <td className="px-4 py-2 text-xs text-gray-600 border-r border-gray-200">{new Date(user.created_at).toLocaleDateString('ja-JP')}</td>
+                          <td className="px-4 py-2 border-r border-gray-200">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={planSelects[user.id] ?? user.plan}
+                                onChange={(e) => setPlanSelects((prev) => ({ ...prev, [user.id]: e.target.value }))}
+                                className="border border-gray-400 px-2 py-1 text-xs bg-white text-gray-900 focus:outline-none focus:border-gray-600"
+                                style={{ borderRadius: 0 }}
+                              >
+                                <option value="trial">トライアル</option>
+                                <option value="metered">従量課金</option>
+                                <option value="monthly">スタンダード</option>
+                                <option value="dev">開発者</option>
+                              </select>
+                              <button
+                                onClick={() => handleChangePlan(user.id, user.plan)}
+                                disabled={planSaving[user.id] || (planSelects[user.id] ?? user.plan) === user.plan}
+                                className="border border-gray-400 bg-gray-200 hover:bg-gray-300 active:bg-gray-400 px-3 py-1 text-xs font-bold text-gray-800 disabled:opacity-40"
+                                style={{ borderRadius: 0 }}
+                              >
+                                {planSaving[user.id] ? '...' : '変更'}
+                              </button>
+                            </div>
+                            {planMessages[user.id] && (
+                              <p className={`text-xs mt-1 ${planMessages[user.id] === 'プランを変更しました' ? 'text-green-700' : 'text-red-700'}`}>
+                                {planMessages[user.id]}
+                              </p>
+                            )}
+                          </td>
                           <td className="px-4 py-2">
                             <div className="flex items-center gap-2">
                               <input

@@ -597,6 +597,18 @@ pub async fn add_credits_for_individual_user(pool: &PgPool, user_id: Uuid, amoun
     Ok(())
 }
 
+pub async fn update_plan_for_individual_user(pool: &PgPool, user_id: Uuid, plan: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE organizations SET plan = $1
+         WHERE id = (SELECT organization_id FROM users WHERE id = $2 AND role = 'individual')",
+    )
+    .bind(plan)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn list_transcriptions(
     pool: &PgPool,
     org_id: Uuid,
