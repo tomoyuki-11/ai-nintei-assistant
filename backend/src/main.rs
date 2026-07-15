@@ -232,14 +232,14 @@ async fn main() {
 
     tracing::info!("Database connected and migrations applied");
 
-    // Excel保存から5日後に自動削除するバックグラウンドタスク
+    // 整形完了から5日後に自動削除するバックグラウンドタスク
     let cleanup_pool = pool.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
         loop {
             interval.tick().await;
             match db::delete_excel_expired_records(&cleanup_pool).await {
-                Ok(n) if n > 0 => tracing::info!("自動削除: {}件のExcel済みレコードを削除しました", n),
+                Ok(n) if n > 0 => tracing::info!("自動削除: {}件の整形済みレコードを削除しました", n),
                 Err(e) => tracing::error!("自動削除エラー: {}", e),
                 _ => {}
             }

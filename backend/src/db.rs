@@ -619,8 +619,8 @@ pub async fn mark_excel_downloaded(
 pub async fn delete_excel_expired_records(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         "DELETE FROM transcriptions
-         WHERE excel_downloaded_at IS NOT NULL
-           AND excel_downloaded_at < NOW() - INTERVAL '5 days'",
+         WHERE formatted IS NOT NULL
+           AND created_at < NOW() - INTERVAL '5 days'",
     )
     .execute(pool)
     .await?;
