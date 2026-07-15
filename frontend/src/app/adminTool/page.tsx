@@ -185,8 +185,9 @@ export default function SuperAdminPage() {
         return;
       }
       if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
       setIsLoggedIn(true);
-      setOrgs(await res.json());
+      setOrgs(data);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'データの取得に失敗しました');
     } finally {
