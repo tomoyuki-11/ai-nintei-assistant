@@ -86,6 +86,7 @@ const DEFAULT_PROMPT = "";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function SuperAdminPage() {
+  const [mounted, setMounted] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -124,7 +125,12 @@ export default function SuperAdminPage() {
   }
 
   useEffect(() => {
-    if (getSuperAdminToken()) loadOrgs();
+    if (getSuperAdminToken()) {
+      loadOrgs();
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMounted(true);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -182,14 +188,17 @@ export default function SuperAdminPage() {
       if (res.status === 401) {
         removeSuperAdminToken();
         setIsLoggedIn(false);
+        setMounted(true);
         return;
       }
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setIsLoggedIn(true);
+      setMounted(true);
       setOrgs(data);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'データの取得に失敗しました');
+      setMounted(true);
     } finally {
       setLoading(false);
     }
@@ -293,6 +302,10 @@ export default function SuperAdminPage() {
       setSaving(false);
     }
   }
+
+  // ─── ログイン確認中 ─────────────────────────────────────────────────────────
+
+  if (!mounted) return null;
 
   // ─── ログイン画面 ───────────────────────────────────────────────────────────
 
