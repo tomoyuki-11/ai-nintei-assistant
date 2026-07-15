@@ -322,6 +322,7 @@ async fn main() {
         .route("/api/save-result", post(save_result_handler))
         .route("/api/transcription", post(save_transcription_handler))
         .route("/api/transcribe", post(transcribe_handler))
+        .route("/api/audio-upload", post(audio_upload_handler))
         .route("/api/format", post(format_handler))
         .route("/api/history", get(history_handler))
         .route(
@@ -422,21 +423,6 @@ async fn transcribe_handler(
 
     tracing::info!("Whisper送信: filename={}, whisper_mime={}", filename, whisper_mime);
 
-    // 音声ファイルをディスクに保存（5日間ダウンロード可能にするため）
-    let audio_uuid = Uuid::new_v4();
-    let audio_filename = format!("{}.{}", audio_uuid, ext);
-    let audio_save_path = format!("{}/{}", state.audio_storage_path, audio_filename);
-    let saved_audio_path: Option<String> = match tokio::fs::write(&audio_save_path, &audio_data).await {
-        Ok(_) => {
-            tracing::info!("音声ファイル保存: {}", audio_filename);
-            Some(audio_filename)
-        }
-        Err(e) => {
-            tracing::warn!("音声ファイル保存エラー: {}", e);
-            None
-        }
-    };
-
     let part = reqwest::multipart::Part::bytes(audio_data)
         .file_name(filename)
         .mime_str(whisper_mime)
@@ -466,7 +452,7 @@ async fn transcribe_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     tracing::info!("Whisper 成功");
-    Ok(Json(serde_json::json!({ "text": data["text"], "audio_path": saved_audio_path })))
+    Ok(Json(serde_json::json!({ "text": data["text"] })))
 }
 
 // ─── ヘルス ───────────────────────────────────────────────────────────────────
@@ -1192,6 +1178,46 @@ async fn delete_handler(
         let _ = tokio::fs::remove_file(&full_path).await;
     }
     Ok(StatusCode::OK)
+}
+
+async fn audio_upload_handler(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    req: axum::extract::Request,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let content_type = req.headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("audio/webm")
+        .to_string();
+
+    let mime = content_type.split(';').next().unwrap_or("audio/webm").trim().to_string();
+    let ext = if mime.contains("ogg") { "ogg" }
+              else if mime.contains("flac") { "flac" }
+              else if mime.contains("m4a") { "m4a" }
+              else if mime.contains("mp4") { "mp4" }
+              else if mime.contains("mpeg") || mime.contains("mp3") { "mp3" }
+              else if mime.contains("wav") { "wav" }
+              else { "webm" };
+
+    let audio_data = axum::body::to_bytes(req.into_body(), 200 * 1024 * 1024)
+        .await
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    if audio_data.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "音声データが空です".to_string()));
+    }
+
+    let audio_uuid = Uuid::new_v4();
+    let audio_filename = format!("{}.{}", audio_uuid, ext);
+    let audio_save_path = format!("{}/{}", state.audio_storage_path, audio_filename);
+
+    tokio::fs::write(&audio_save_path, &audio_data[..])
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("音声ファイル保存エラー: {}", e)))?;
+
+    tracing::info!("音声ファイル保存: {}", audio_filename);
+    Ok(Json(serde_json::json!({ "audio_path": audio_filename })))
 }
 
 async fn download_audio_handler(

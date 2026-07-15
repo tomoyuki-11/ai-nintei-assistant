@@ -27,6 +27,7 @@ type RecordingContextType = {
   downloadAudio: () => void
   clearPendingAudio: () => void
   clearRecording: () => void
+  getAudioUploadPromise: () => Promise<string | null>
 }
 
 const RecordingContext = createContext<RecordingContextType | null>(null)
@@ -282,6 +283,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const downloadableAudioInitRef = useRef(false)
   const pendingAudioInitRef = useRef(false)
   const userStoppedRef = useRef(false)
+  const audioUploadPromiseRef = useRef<Promise<string | null>>(Promise.resolve(null))
 
   const textRef = useRef('')
   textRef.current = text
@@ -371,6 +373,22 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return HALLUCINATIONS.some((h) => t.includes(h))
   }
 
+  // 音声ファイルをサーバーへアップロード（全チャンク結合済みの fullBlob を1ファイルとして保存）
+  const uploadAudioToServer = useCallback(async (blob: Blob, mimeType: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/audio-upload`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': mimeType },
+        body: blob,
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      return (data.audio_path as string) ?? null
+    } catch {
+      return null
+    }
+  }, [])
+
   // Whisper API呼び出し
   // 戻り値: 文字起こしテキスト（成功）/ null（API/ネットワークエラー）/ ''（無音・ハルシネーション）
   const callWhisper = useCallback(async (blob: Blob, filename?: string): Promise<string | null> => {
@@ -412,12 +430,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
       const data = JSON.parse(responseText)
       const transcribed = data.text || ''
-      // audio_path をローカルストレージに保存し、後続の保存処理で参照できるようにする
-      if (data.audio_path) {
-        localStorage.setItem('last_audio_path', data.audio_path)
-      } else {
-        localStorage.removeItem('last_audio_path')
-      }
       if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
         return ''
       }
@@ -571,6 +583,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           resolve(textRef.current)
         } else {
           setPendingAudio(null)
+          // 全チャンク結合済みの fullBlob を1ファイルとしてアップロード（saveTranscription が await する）
+          audioUploadPromiseRef.current = uploadAudioToServer(fullBlob, mimeType)
           // pipeline_pending は整形完了後に record/page.tsx 側でクリアする
           resolve(appendTranscription(result))
         }
@@ -578,7 +592,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
       mediaRecorder.stop()
     })
-  }, [callWhisper, appendTranscription])
+  }, [callWhisper, appendTranscription, uploadAudioToServer])
 
   // 音声ファイルをアップロードして文字起こし（既存テキストに追記）
   const transcribeFile = useCallback(async (file: File | Blob): Promise<string> => {
@@ -592,8 +606,11 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       setRecordingError('音声が検出されませんでした。音声が含まれているファイルをご確認ください。')
       return textRef.current
     }
+    // 文字起こし成功時にファイルをサーバーへアップロード
+    const mimeType = file.type || 'audio/webm'
+    audioUploadPromiseRef.current = uploadAudioToServer(file, mimeType)
     return appendTranscription(transcribed)
-  }, [callWhisper, appendTranscription])
+  }, [callWhisper, appendTranscription, uploadAudioToServer])
 
   // 音声 blob を文字起こしして生テキストを返す（text state は変更しない）
   const transcribeBlob = useCallback(async (blob: Blob): Promise<string> => {
@@ -613,9 +630,11 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       setRecordingError('音声が検出されませんでした。録音音声に音声データが含まれていない可能性があります。')
       return textRef.current
     }
+    const audioToUpload = pendingAudio
     setPendingAudio(null)
+    audioUploadPromiseRef.current = uploadAudioToServer(audioToUpload, audioToUpload.type || 'audio/webm')
     return appendTranscription(transcribed)
-  }, [pendingAudio, callWhisper, appendTranscription])
+  }, [pendingAudio, callWhisper, appendTranscription, uploadAudioToServer])
 
   // リロードで中断された録音をIndexedDBから復元して文字起こし
   const recoverAndTranscribe = useCallback(async (): Promise<string> => {
@@ -642,8 +661,9 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
 
     setDownloadableAudio(fullBlob)
+    audioUploadPromiseRef.current = uploadAudioToServer(fullBlob, data.mimeType)
     return appendTranscription(result)
-  }, [callWhisper, appendTranscription])
+  }, [callWhisper, appendTranscription, uploadAudioToServer])
 
   const getRecoveryBlob = useCallback(async (): Promise<Blob | null> => {
     const data = await getRecoveryData()
@@ -724,6 +744,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       downloadAudio,
       clearPendingAudio,
       clearRecording,
+      getAudioUploadPromise: () => audioUploadPromiseRef.current,
     }}>
       {children}
     </RecordingContext.Provider>

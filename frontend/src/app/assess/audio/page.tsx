@@ -71,7 +71,7 @@ async function clearUploadFile(): Promise<void> {
 
 export default function AudioPage() {
   const router = useRouter()
-  const { isTranscribing, setText, transcribeFile, recordingError, setRecordingError } = useRecording()
+  const { isTranscribing, setText, transcribeFile, recordingError, setRecordingError, getAudioUploadPromise } = useRecording()
 
   const [file, setFile] = useState<File | null>(null)
   const [isFormatting, setIsFormatting] = useState(false)
@@ -136,8 +136,8 @@ export default function AudioPage() {
       clearUploadFile()
       setText('')
       // 保存・課金（クライアントが結果を受け取った後に実行）
-      const audioPath = localStorage.getItem('last_audio_path')
-      if (audioPath) localStorage.removeItem('last_audio_path')
+      // 音声アップロード完了を待ってから保存（transcribeFile内でアップロード開始済み）
+      const audioPath = await getAudioUploadPromise()
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },

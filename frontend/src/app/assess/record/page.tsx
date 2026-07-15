@@ -20,6 +20,7 @@ export default function RecordPage() {
     startRecording, stopRecording, pauseRecording, resumeRecording,
     retryTranscription, recoverAndTranscribe, getRecoveryBlob, discardRecovery,
     transcribeFile, transcribeBlob, downloadAudio, clearPendingAudio, clearRecording,
+    getAudioUploadPromise,
   } = useRecording()
 
   const continuationRef = useRef<Blob | null>(null)
@@ -152,8 +153,7 @@ export default function RecordPage() {
 
   async function saveTranscription(text: string): Promise<string | null> {
     try {
-      const audioPath = localStorage.getItem('last_audio_path')
-      if (audioPath) localStorage.removeItem('last_audio_path')
+      const audioPath = await getAudioUploadPromise()
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/transcription`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
