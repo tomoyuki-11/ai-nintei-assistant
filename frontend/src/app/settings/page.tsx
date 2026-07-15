@@ -149,7 +149,9 @@ export default function SettingsPage() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">サポート</p>
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
               <a
-                href={`mailto:${CONTACT_EMAIL}`}
+                href="https://lp.ai-nintei-assistant.com/contact"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center justify-between px-5 py-4 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 <span>お問い合わせ</span>
