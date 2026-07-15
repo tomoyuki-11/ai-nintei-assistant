@@ -10,6 +10,7 @@ export default function AssessPage() {
   const router = useRouter()
   const { hasPendingRecovery, pendingAudio, downloadableAudio } = useRecording()
   const [pipelinePending, setPipelinePending] = useState(false)
+  const [tipsOpen, setTipsOpen] = useState(false)
 
   useEffect(() => {
     if (!isAuthenticated()) router.push('/start')
@@ -110,6 +111,56 @@ export default function AssessPage() {
           </Link>
 
         </div>
+
+        {/* 使い方のポイント */}
+        <div className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <button
+            onClick={() => setTipsOpen(!tipsOpen)}
+            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+          >
+            <span className="text-sm font-semibold text-gray-700">使い方のポイント</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${tipsOpen ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {tipsOpen && (
+            <div className="border-t border-gray-100 px-5 py-4 space-y-4 text-sm text-gray-700">
+              <div className="flex gap-3">
+                <span className="shrink-0 font-bold text-blue-600">①</span>
+                <div>
+                  <p className="font-medium">スマートフォンの画面がスリープにならないように設定してください。</p>
+                  <p className="text-xs text-gray-500 mt-0.5">録音中や処理中に画面が消えないよう、事前に設定を確認しておきましょう。</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="shrink-0 font-bold text-blue-600">②</span>
+                <div>
+                  <p className="font-medium">録音中は、調査対象者の声がはっきり録音できる場所にスマートフォンを置いてください。</p>
+                  <p className="text-xs text-gray-500 mt-0.5">机の上など、声を拾いやすい場所に置くことをおすすめします。<br />※スマートフォンの画面は伏せておいても構いません。</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="shrink-0 font-bold text-blue-600">③</span>
+                <div>
+                  <p className="font-medium">録音停止後、文字起こしや訂正処理に少し時間がかかります。</p>
+                  <p className="text-xs text-gray-500 mt-0.5">処理が終わるまでは、別の画面を開いたり、スマートフォンをスリープ状態にしたりせず、そのまましばらくお待ちください。</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="shrink-0 font-bold text-blue-600">④</span>
+                <div>
+                  <p className="font-medium">音声データやExcelデータは、バックアップとして保存・活用してください。</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
       </div>
     </main>
   )
