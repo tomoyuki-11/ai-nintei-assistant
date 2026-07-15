@@ -469,7 +469,7 @@ export default function SuperAdminPage() {
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">残クレジット</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">トライアル期限</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">登録日</th>
-                        <th className="text-left px-4 py-2 font-bold border-r border-gray-300">開発のためのプラン変更</th>
+                        <th className="text-left px-4 py-2 font-bold border-r border-gray-300">開発のためのプラン変更<span className="font-normal text-gray-500 ml-1">（※変更による料金は発生しない）</span></th>
                         <th className="text-left px-4 py-2 font-bold">クレジット追加</th>
                       </tr>
                     </thead>
