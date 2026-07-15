@@ -284,6 +284,7 @@ async fn main() {
         )
         .route("/api/adminTool/organizations/{id}/staff", get(admin_tool_list_staff_handler))
         .route("/api/adminTool/individual-users", get(admin_tool_list_individual_users_handler))
+        .route("/api/adminTool/individual-users/{user_id}/add-credits", post(admin_tool_add_credits_handler))
         // 個人ユーザー
         .route("/api/individual/register", post(individual_register_handler))
         .route("/api/individual/login", post(individual_login_handler))
@@ -557,6 +558,26 @@ async fn admin_tool_list_individual_users_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(users))
+}
+
+#[derive(serde::Deserialize)]
+struct AddCreditsRequest {
+    amount: i32,
+}
+
+async fn admin_tool_add_credits_handler(
+    State(state): State<AppState>,
+    _: AuthSuperAdmin,
+    Path(user_id): Path<Uuid>,
+    Json(body): Json<AddCreditsRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    if body.amount <= 0 {
+        return Err((StatusCode::BAD_REQUEST, "1以上の数値を指定してください".to_string()));
+    }
+    db::add_credits_for_individual_user(&state.db, user_id, body.amount)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
 }
 
 // ─── 施設ユーザーハンドラー ───────────────────────────────────────────────────

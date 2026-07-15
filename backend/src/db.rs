@@ -585,6 +585,18 @@ pub async fn list_individual_users(pool: &PgPool) -> Result<Vec<IndividualUserAd
     .await
 }
 
+pub async fn add_credits_for_individual_user(pool: &PgPool, user_id: Uuid, amount: i32) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE organizations SET metered_credits = metered_credits + $1
+         WHERE id = (SELECT organization_id FROM users WHERE id = $2 AND role = 'individual')",
+    )
+    .bind(amount)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn list_transcriptions(
     pool: &PgPool,
     org_id: Uuid,

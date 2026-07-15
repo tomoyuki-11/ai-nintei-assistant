@@ -117,6 +117,9 @@ export default function SuperAdminPage() {
   const [individualUsers, setIndividualUsers] = useState<IndividualUser[]>([]);
   const [individualLoading, setIndividualLoading] = useState(false);
   const [individualError, setIndividualError] = useState('');
+  const [creditInputs, setCreditInputs] = useState<Record<string, string>>({});
+  const [creditAdding, setCreditAdding] = useState<Record<string, boolean>>({});
+  const [creditMessages, setCreditMessages] = useState<Record<string, string>>({});
 
   function copyLicenseKey(orgId: string, key: string) {
     navigator.clipboard.writeText(key);
@@ -157,6 +160,31 @@ export default function SuperAdminPage() {
       setIndividualError(e instanceof Error ? e.message : 'データの取得に失敗しました');
     } finally {
       setIndividualLoading(false);
+    }
+  }
+
+  async function handleAddCredits(userId: string) {
+    const amount = parseInt(creditInputs[userId] || '0', 10);
+    if (!amount || amount <= 0) return;
+    setCreditAdding((prev) => ({ ...prev, [userId]: true }));
+    setCreditMessages((prev) => ({ ...prev, [userId]: '' }));
+    try {
+      const res = await fetch(`${API}/api/adminTool/individual-users/${userId}/add-credits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...superAdminHeaders() },
+        body: JSON.stringify({ amount }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setCreditInputs((prev) => ({ ...prev, [userId]: '' }));
+      setCreditMessages((prev) => ({ ...prev, [userId]: `+${amount}回 追加しました` }));
+      setTimeout(() => setCreditMessages((prev) => ({ ...prev, [userId]: '' })), 3000);
+      setIndividualUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, credits: u.credits + amount } : u))
+      );
+    } catch (e) {
+      setCreditMessages((prev) => ({ ...prev, [userId]: e instanceof Error ? e.message : '失敗しました' }));
+    } finally {
+      setCreditAdding((prev) => ({ ...prev, [userId]: false }));
     }
   }
 
@@ -408,26 +436,54 @@ export default function SuperAdminPage() {
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                        <th className="text-left px-5 py-3 font-medium">メールアドレス</th>
-                        <th className="text-left px-5 py-3 font-medium">プラン</th>
-                        <th className="text-left px-5 py-3 font-medium">クレジット</th>
-                        <th className="text-left px-5 py-3 font-medium">トライアル期限</th>
-                        <th className="text-left px-5 py-3 font-medium">登録日</th>
+                      <tr className="border-b-2 border-gray-400 bg-gray-200 text-xs text-gray-700">
+                        <th className="text-left px-4 py-2 font-bold border-r border-gray-300">メールアドレス</th>
+                        <th className="text-left px-4 py-2 font-bold border-r border-gray-300">プラン</th>
+                        <th className="text-left px-4 py-2 font-bold border-r border-gray-300">残クレジット</th>
+                        <th className="text-left px-4 py-2 font-bold border-r border-gray-300">トライアル期限</th>
+                        <th className="text-left px-4 py-2 font-bold border-r border-gray-300">登録日</th>
+                        <th className="text-left px-4 py-2 font-bold">クレジット追加</th>
                       </tr>
                     </thead>
                     <tbody>
                       {individualUsers.map((user, i) => (
-                        <tr key={user.id} className={`border-b border-gray-50 ${i % 2 === 0 ? '' : 'bg-gray-50/50'}`}>
-                          <td className="px-5 py-3 font-medium text-gray-900">{user.email}</td>
-                          <td className="px-5 py-3">
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PLAN_COLORS[user.plan] ?? 'bg-gray-100 text-gray-600'}`}>
+                        <tr key={user.id} className={`border-b border-gray-200 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                          <td className="px-4 py-2 font-mono text-xs text-gray-900 border-r border-gray-200">{user.email}</td>
+                          <td className="px-4 py-2 border-r border-gray-200">
+                            <span className="text-xs font-medium text-gray-800">
                               {PLAN_LABELS[user.plan] ?? user.plan}
                             </span>
                           </td>
-                          <td className="px-5 py-3 text-gray-700">{user.credits}回</td>
-                          <td className="px-5 py-3 text-gray-500">{formatDate(user.license_expires_at)}</td>
-                          <td className="px-5 py-3 text-gray-500">{new Date(user.created_at).toLocaleDateString('ja-JP')}</td>
+                          <td className="px-4 py-2 text-gray-900 font-bold text-sm border-r border-gray-200">{user.credits}回</td>
+                          <td className="px-4 py-2 text-xs text-gray-600 border-r border-gray-200">{formatDate(user.license_expires_at)}</td>
+                          <td className="px-4 py-2 text-xs text-gray-600 border-r border-gray-200">{new Date(user.created_at).toLocaleDateString('ja-JP')}</td>
+                          <td className="px-4 py-2">
+                            <div className="flex items-center gap-0">
+                              <input
+                                type="number"
+                                min="1"
+                                value={creditInputs[user.id] || ''}
+                                onChange={(e) => setCreditInputs((prev) => ({ ...prev, [user.id]: e.target.value }))}
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddCredits(user.id)}
+                                placeholder="回数"
+                                className="w-20 border border-gray-400 px-2 py-1 text-xs font-mono bg-white text-gray-900 focus:outline-none focus:border-blue-600"
+                                style={{ borderRadius: 0 }}
+                              />
+                              <button
+                                onClick={() => handleAddCredits(user.id)}
+                                disabled={creditAdding[user.id]}
+                                className="border border-l-0 border-gray-400 bg-gray-200 hover:bg-gray-300 active:bg-gray-400 px-3 py-1 text-xs font-bold text-gray-800 disabled:opacity-50"
+                                style={{ borderRadius: 0 }}
+                              >
+                                {creditAdding[user.id] ? '...' : '追加'}
+                              </button>
+                            </div>
+                            {creditMessages[user.id] && (
+                              <p className={`text-xs mt-1 font-mono ${creditMessages[user.id].startsWith('+') ? 'text-green-700' : 'text-red-700'}`}>
+                                {creditMessages[user.id]}
+                              </p>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
