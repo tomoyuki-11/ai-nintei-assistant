@@ -86,7 +86,7 @@ const DEFAULT_PROMPT = "";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function SuperAdminPage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(() => !!getSuperAdminToken());
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [activeTab, setActiveTab] = useState<"orgs" | "individuals">("orgs");
@@ -124,8 +124,9 @@ export default function SuperAdminPage() {
   }
 
   useEffect(() => {
-    if (isLoggedIn) loadOrgs();
-  }, [isLoggedIn]);
+    if (getSuperAdminToken()) loadOrgs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (isLoggedIn && activeTab === "individuals") loadIndividualUsers();
@@ -184,6 +185,7 @@ export default function SuperAdminPage() {
         return;
       }
       if (!res.ok) throw new Error(await res.text());
+      setIsLoggedIn(true);
       setOrgs(await res.json());
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'データの取得に失敗しました');
