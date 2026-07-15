@@ -493,10 +493,9 @@ export default function SuperAdminPage() {
                                 className="border border-gray-400 px-2 py-1 text-xs bg-white text-gray-900 focus:outline-none focus:border-gray-600"
                                 style={{ borderRadius: 0 }}
                               >
-                                <option value="trial">トライアル</option>
-                                <option value="metered">従量課金</option>
-                                <option value="monthly">スタンダード</option>
-                                <option value="dev">開発者</option>
+                                <option value="trial">開発者用（トライアル）</option>
+                                <option value="metered">開発者用（従量課金）</option>
+                                <option value="monthly">開発者用（スタンダード）</option>
                               </select>
                               <button
                                 onClick={() => handleChangePlan(user.id, user.plan)}
