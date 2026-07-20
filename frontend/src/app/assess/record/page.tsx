@@ -148,6 +148,7 @@ useEffect(() => {
   )
 
   async function requestWakeLock() {
+    if (isIOS) return
     try {
       if ('wakeLock' in navigator) {
         type WakeLockNav = Navigator & { wakeLock: { request: (type: string) => Promise<{ release: () => Promise<void> }> } }
