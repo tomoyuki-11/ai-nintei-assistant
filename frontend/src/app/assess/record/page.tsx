@@ -24,6 +24,7 @@ export default function RecordPage() {
   } = useRecording()
 
   const continuationRef = useRef<Blob | null>(null)
+  const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null)
 
   const [result, setResult] = useState('')
   const [isFormatting, setIsFormatting] = useState(false)
@@ -63,6 +64,14 @@ const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
     return () => clearInterval(id)
   }, [isRecording, isPaused, isPageHidden])
 
+  useEffect(() => {
+    if (isRecording) return
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch(() => {})
+      wakeLockRef.current = null
+    }
+  }, [isRecording])
+
   // 電話着信などでバックグラウンドになったとき録音・タイマーを自動停止、復帰時に再開
   useEffect(() => {
     if (!isRecording) return
@@ -73,6 +82,12 @@ const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
       } else {
         setIsPageHidden(false)
         resumeRecording()
+        if ('wakeLock' in navigator) {
+          type WakeLockNav = Navigator & { wakeLock: { request: (type: string) => Promise<{ release: () => Promise<void> }> } }
+          ;(navigator as WakeLockNav).wakeLock.request('screen')
+            .then(lock => { wakeLockRef.current = lock })
+            .catch(() => {})
+        }
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -132,6 +147,15 @@ useEffect(() => {
     </div>
   )
 
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        type WakeLockNav = Navigator & { wakeLock: { request: (type: string) => Promise<{ release: () => Promise<void> }> } }
+        wakeLockRef.current = await (navigator as WakeLockNav).wakeLock.request('screen')
+      }
+    } catch {}
+  }
+
   async function handleStartRecordingClick() {
     const blocked = await checkPlanLimit()
     if (blocked) { setLimitPlan(blocked); return }
@@ -140,6 +164,7 @@ useEffect(() => {
       return
     }
     startRecording()
+    requestWakeLock()
   }
 
   async function saveTranscription(text: string): Promise<string | null> {
@@ -262,8 +287,8 @@ useEffect(() => {
   return (
     <main className="min-h-screen bg-gray-50">
 
-      {/* iOS録音中フルスクリーンオーバーレイ */}
-      {isRecording && isIOS && (
+      {/* 録音中フルスクリーンオーバーレイ（iOS・Android共通） */}
+      {isRecording && isMobile && (
         <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center select-none">
           {(() => {
             const { h, m, s } = timeParts(recordingSeconds)
@@ -299,8 +324,10 @@ useEffect(() => {
           {isPageHidden ? (
             <p className="text-gray-500 text-sm mt-12">電話終了後に自動で再開します</p>
           ) : (
-            showScreenWarning && !isPaused && (
-              <p className="text-gray-500 text-lg mt-12">画面をオンのままにしてください</p>
+            !isPaused && (
+              <p className="text-gray-500 text-lg mt-12">
+                {isIOS ? '画面をオンのままにしてください' : '画面を閉じないでください'}
+              </p>
             )
           )}
           <p className="text-gray-700 text-xs mt-4">録音が完了するまで画面を閉じたり、再読み込みしないでください</p>
@@ -347,6 +374,7 @@ useEffect(() => {
                   if (autoLockDontShow) localStorage.setItem('autoLockConfirmed', '1')
                   setShowAutoLockModal(false)
                   startRecording()
+                  requestWakeLock()
                 }}
                 className="flex-1 rounded-lg bg-red-500 px-4 py-2 text-sm text-white font-medium hover:bg-red-600 transition-colors"
               >設定済み・録音開始</button>
