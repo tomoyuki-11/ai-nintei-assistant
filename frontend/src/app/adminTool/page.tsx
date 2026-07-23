@@ -23,6 +23,7 @@ type IndividualUser = {
   email: string;
   plan: string;
   credits: number;
+  monthly_use_count: number;
   created_at: string;
   license_expires_at: string | null;
 };
@@ -467,6 +468,7 @@ export default function SuperAdminPage() {
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">メールアドレス</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">プラン</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">残クレジット</th>
+                        <th className="text-left px-4 py-2 font-bold border-r border-gray-300">今月の残り回数</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">トライアル期限</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">登録日</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">開発のためのプラン変更<span className="font-normal text-gray-500 ml-1">（※変更による料金は発生しない）</span></th>
@@ -483,6 +485,21 @@ export default function SuperAdminPage() {
                             </span>
                           </td>
                           <td className="px-4 py-2 text-gray-900 font-bold text-sm border-r border-gray-200">{user.credits}回</td>
+                          <td className="px-4 py-2 text-sm border-r border-gray-200">
+                            {user.plan === 'trial' && (
+                              <span className={`font-bold ${Math.max(0, 3 - user.monthly_use_count) === 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                {Math.max(0, 3 - user.monthly_use_count)}回 <span className="text-xs text-gray-400 font-normal">/ 3回</span>
+                              </span>
+                            )}
+                            {user.plan === 'monthly' && (
+                              <span className={`font-bold ${Math.max(0, 8 - user.monthly_use_count) === 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                {Math.max(0, 8 - user.monthly_use_count)}回 <span className="text-xs text-gray-400 font-normal">/ 8回</span>
+                              </span>
+                            )}
+                            {(user.plan === 'metered' || user.plan === 'dev') && (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </td>
                           <td className="px-4 py-2 text-xs text-gray-600 border-r border-gray-200">{formatDate(user.license_expires_at)}</td>
                           <td className="px-4 py-2 text-xs text-gray-600 border-r border-gray-200">{new Date(user.created_at).toLocaleDateString('ja-JP')}</td>
                           <td className="px-4 py-2 border-r border-gray-200">

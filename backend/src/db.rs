@@ -592,6 +592,7 @@ pub struct IndividualUserAdmin {
     pub email: String,
     pub plan: String,
     pub credits: i32,
+    pub monthly_use_count: i32,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub license_expires_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -599,9 +600,11 @@ pub struct IndividualUserAdmin {
 pub async fn list_individual_users(pool: &PgPool) -> Result<Vec<IndividualUserAdmin>, sqlx::Error> {
     sqlx::query_as::<_, IndividualUserAdmin>(
         "SELECT u.id, u.email, o.plan, COALESCE(o.metered_credits, 0) as credits,
+                COALESCE(uc.count, 0) as monthly_use_count,
                 u.created_at, o.license_expires_at
          FROM users u
          JOIN organizations o ON o.id = u.organization_id
+         LEFT JOIN usage_counts uc ON uc.organization_id = o.id AND uc.year_month = TO_CHAR(NOW(), 'YYYY-MM')
          WHERE u.role = 'individual'
          ORDER BY u.created_at DESC",
     )
