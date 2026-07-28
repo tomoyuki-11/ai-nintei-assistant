@@ -181,6 +181,7 @@ export default function SuperAdminPage() {
       if (!res.ok) throw new Error(await res.text());
       setPlanMessages((prev) => ({ ...prev, [userId]: 'プランを変更しました' }));
       setTimeout(() => setPlanMessages((prev) => ({ ...prev, [userId]: '' })), 3000);
+      setPlanSelects((prev) => ({ ...prev, [userId]: '' }));
       setIndividualUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, plan } : u))
       );
