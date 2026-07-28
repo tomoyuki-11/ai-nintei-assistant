@@ -626,7 +626,7 @@ pub async fn add_credits_for_individual_user(pool: &PgPool, user_id: Uuid, amoun
 
 pub async fn update_plan_for_individual_user(pool: &PgPool, user_id: Uuid, plan: &str) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE organizations SET plan = $1
+        "UPDATE organizations SET plan = $1, license_expires_at = NULL
          WHERE id = (SELECT organization_id FROM users WHERE id = $2 AND role = 'individual')",
     )
     .bind(plan)
