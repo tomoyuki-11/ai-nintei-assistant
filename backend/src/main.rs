@@ -1,5 +1,5 @@
 use axum::{
-    extract::{FromRequest, Multipart, Path, State},
+    extract::{DefaultBodyLimit, FromRequest, Multipart, Path, State},
     http::{Method, StatusCode},
     routing::{get, post},
     Json, Router,
@@ -307,7 +307,10 @@ async fn main() {
         stripe_credit_price_id,
         stripe_individual_price_id,
         stripe_individual_credit_price_id,
-        http_client: reqwest::Client::new(),
+        http_client: reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(600))
+            .build()
+            .expect("reqwest Client 初期化失敗"),
         openai_api_key,
         audio_storage_path,
     };
@@ -368,6 +371,7 @@ async fn main() {
         .route("/api/history/{id}/text", axum::routing::delete(delete_text_handler))
         .route("/api/history/{id}/formatted", axum::routing::delete(delete_formatted_handler))
         .route("/api/history/{id}/mark-downloaded", post(mark_downloaded_handler))
+        .layer(DefaultBodyLimit::disable())
         .layer(cors)
         .with_state(state);
 
