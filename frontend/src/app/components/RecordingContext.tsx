@@ -234,10 +234,12 @@ function getMimeFromExt(ext: string): string {
 const WHISPER_RETRY_DELAYS = [10000, 30000, 60000]
 
 async function callWithBackoff(fn: () => Promise<string | null>): Promise<string | null> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return null
   let result = await fn()
   for (const delay of WHISPER_RETRY_DELAYS) {
     if (result !== null) break
     await new Promise((r) => setTimeout(r, delay))
+    if (typeof navigator !== 'undefined' && !navigator.onLine) break
     result = await fn()
   }
   return result
@@ -576,6 +578,14 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
         // 録音停止直後にサーバーへアップロード開始（Whisper失敗時も音声を保護）
         audioUploadPromiseRef.current = uploadAudioToServer(preSaveBlob, mimeType)
+
+        // オフライン時は文字起こしをスキップして即座にpendingAudioをセット（100秒待たせない）
+        if (!navigator.onLine) {
+          setPendingAudio(preSaveBlob)
+          localStorage.removeItem('pipeline_pending')
+          resolve(textRef.current)
+          return
+        }
 
         const { result, failedGroupBlob, fullBlob } = await transcribeChunks(
           chunksRef.current, mimeType, callWhisper
