@@ -12,7 +12,6 @@ export default function HamburgerMenu() {
   const payload = getTokenPayload()
   const isAdmin = payload?.role === 'admin'
   const isIndividual = payload?.role === 'individual'
-  const email = payload?.email
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -64,11 +63,6 @@ export default function HamburgerMenu() {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-50">
-          {email && (
-            <div className="px-4 py-3 border-b border-gray-100">
-              <p className="text-xs text-gray-500 truncate">{email}</p>
-            </div>
-          )}
           <Link
             href="/"
             onClick={() => setOpen(false)}
