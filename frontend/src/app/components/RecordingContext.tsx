@@ -229,6 +229,19 @@ function getMimeFromExt(ext: string): string {
 
 // --- Whisperへのチャンク送信（分割対応） ---
 
+// 指数バックオフ: 10秒→30秒→60秒で最大3回リトライ
+const WHISPER_RETRY_DELAYS = [10000, 30000, 60000]
+
+async function callWithBackoff(fn: () => Promise<string | null>): Promise<string | null> {
+  let result = await fn()
+  for (const delay of WHISPER_RETRY_DELAYS) {
+    if (result !== null) break
+    await new Promise((r) => setTimeout(r, delay))
+    result = await fn()
+  }
+  return result
+}
+
 async function transcribeChunks(
   chunks: Blob[],
   mimeType: string,
@@ -238,11 +251,7 @@ async function transcribeChunks(
   const totalSize = chunks.reduce((sum, c) => sum + c.size, 0)
 
   if (totalSize <= MAX_WHISPER_BYTES) {
-    let transcribed = await callWhisper(fullBlob)
-    if (transcribed === null) {
-      await new Promise((r) => setTimeout(r, 3000))
-      transcribed = await callWhisper(fullBlob)
-    }
+    const transcribed = await callWithBackoff(() => callWhisper(fullBlob))
     return { result: transcribed, fullBlob }
   }
 
@@ -251,11 +260,7 @@ async function transcribeChunks(
   const accumulated: string[] = []
   for (const group of groups) {
     const groupBlob = new Blob(group, { type: mimeType })
-    let result = await callWhisper(groupBlob)
-    if (result === null) {
-      await new Promise((r) => setTimeout(r, 3000))
-      result = await callWhisper(groupBlob)
-    }
+    const result = await callWithBackoff(() => callWhisper(groupBlob))
     if (result === null) {
       return { result: null, failedGroupBlob: groupBlob, fullBlob }
     }
@@ -623,7 +628,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   // 録音失敗時に保存された音声を再度文字起こし
   const retryTranscription = useCallback(async (): Promise<string> => {
     if (!pendingAudio) return textRef.current
-    const transcribed = await callWhisper(pendingAudio)
+    const transcribed = await callWithBackoff(() => callWhisper(pendingAudio))
     if (transcribed === null) {
       setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
       return textRef.current
