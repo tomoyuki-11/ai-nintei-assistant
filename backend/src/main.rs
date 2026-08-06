@@ -247,6 +247,8 @@ async fn main() {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
         loop {
             interval.tick().await;
+
+            // 整形完了済みレコードを5日後に削除
             match db::delete_excel_expired_records(&cleanup_pool).await {
                 Ok((n, audio_paths)) if n > 0 => {
                     tracing::info!("自動削除: {}件の整形済みレコードを削除しました", n);
@@ -257,6 +259,39 @@ async fn main() {
                 }
                 Err(e) => tracing::error!("自動削除エラー: {}", e),
                 _ => {}
+            }
+
+            // DBに紐付けのない孤立ファイルを5日後に削除
+            let five_days_secs = 5 * 24 * 3600;
+            if let Ok(mut entries) = tokio::fs::read_dir(&cleanup_audio_path).await {
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    let path = entry.path();
+                    let filename = match path.file_name().and_then(|n| n.to_str()) {
+                        Some(n) => n.to_string(),
+                        None => continue,
+                    };
+                    let age_secs = match tokio::fs::metadata(&path).await {
+                        Ok(meta) => match meta.modified() {
+                            Ok(modified) => std::time::SystemTime::now()
+                                .duration_since(modified)
+                                .unwrap_or_default()
+                                .as_secs(),
+                            Err(_) => continue,
+                        },
+                        Err(_) => continue,
+                    };
+                    if age_secs <= five_days_secs {
+                        continue;
+                    }
+                    match db::is_audio_path_tracked(&cleanup_pool, &filename).await {
+                        Ok(false) => {
+                            let _ = tokio::fs::remove_file(&path).await;
+                            tracing::info!("孤立ファイル削除: {}", filename);
+                        }
+                        Err(e) => tracing::error!("孤立ファイル確認エラー: {}", e),
+                        _ => {}
+                    }
+                }
             }
         }
     });

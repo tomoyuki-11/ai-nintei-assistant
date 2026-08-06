@@ -568,6 +568,9 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         setDownloadableAudio(preSaveBlob)
         localStorage.setItem('pipeline_pending', '1')
 
+        // 録音停止直後にサーバーへアップロード開始（Whisper失敗時も音声を保護）
+        audioUploadPromiseRef.current = uploadAudioToServer(preSaveBlob, mimeType)
+
         const { result, failedGroupBlob, fullBlob } = await transcribeChunks(
           chunksRef.current, mimeType, callWhisper
         )
@@ -583,8 +586,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           resolve(textRef.current)
         } else {
           setPendingAudio(null)
-          // 全チャンク結合済みの fullBlob を1ファイルとしてアップロード（saveTranscription が await する）
-          audioUploadPromiseRef.current = uploadAudioToServer(fullBlob, mimeType)
+          // アップロードは録音停止直後に既に開始済み
           // pipeline_pending は整形完了後に record/page.tsx 側でクリアする
           resolve(appendTranscription(result))
         }

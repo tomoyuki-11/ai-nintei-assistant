@@ -260,9 +260,9 @@ useEffect(() => {
     const savedText = localStorage.getItem('pipeline_text') || ''
     const text = savedText || await transcribeFile(downloadableAudio)
     if (!text.trim()) return
-    setPipelinePending(false)
-    localStorage.removeItem('pipeline_pending')
-    localStorage.removeItem('pipeline_text')
+    // 新たに文字起こしした場合は次回リカバリのためにlocalStorageへ保存
+    if (!savedText && text) localStorage.setItem('pipeline_text', text)
+    // pipeline_pending・pipelinePendingはformatText成功時にクリアする（整形失敗時もバナーを維持するため）
     const id = await saveTranscription(text)
     savedIdRef.current = id
     await formatText(text, id)
@@ -272,6 +272,10 @@ useEffect(() => {
     const currentText = await retryTranscription()
     if (!currentText.trim()) return
     clearPendingAudio()
+    // 整形失敗時に「処理が途中で中断されました」バナーで再試行できるようにする
+    localStorage.setItem('pipeline_pending', '1')
+    localStorage.setItem('pipeline_text', currentText)
+    setPipelinePending(true)
     const id = await saveTranscription(currentText)
     await formatText(currentText, id)
   }

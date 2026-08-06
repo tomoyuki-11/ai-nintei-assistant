@@ -680,3 +680,13 @@ pub async fn delete_excel_expired_records(pool: &PgPool) -> Result<(u64, Vec<Str
     let audio_paths: Vec<String> = rows.into_iter().filter_map(|(p,)| p).collect();
     Ok((count, audio_paths))
 }
+
+pub async fn is_audio_path_tracked(pool: &PgPool, filename: &str) -> Result<bool, sqlx::Error> {
+    let row: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM transcriptions WHERE audio_path = $1)"
+    )
+    .bind(filename)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0)
+}
