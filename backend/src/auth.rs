@@ -17,6 +17,8 @@ pub struct Claims {
     pub role: String,
     #[serde(default)]
     pub name: String,
+    #[serde(default)]
+    pub email: String,
     pub exp: u64,
 }
 
@@ -25,6 +27,7 @@ pub fn create_token(
     org_id: Uuid,
     role: &str,
     name: &str,
+    email: &str,
     secret: &str,
 ) -> Result<String, jsonwebtoken::errors::Error> {
     let exp = (Utc::now() + chrono::Duration::days(30)).timestamp() as u64;
@@ -33,6 +36,7 @@ pub fn create_token(
         org_id: org_id.to_string(),
         role: role.to_string(),
         name: name.to_string(),
+        email: email.to_string(),
         exp,
     };
     encode(

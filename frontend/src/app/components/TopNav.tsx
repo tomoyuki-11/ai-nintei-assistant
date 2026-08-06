@@ -15,8 +15,13 @@ export default function TopNav() {
     router.push('/start')
   }
 
+  const email = payload?.email
+
   return (
     <div className="flex items-center gap-2">
+      {email && (
+        <span className="text-xs text-gray-500 hidden sm:block">{email}</span>
+      )}
       <Link
         href="/history"
         className="shrink-0 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"

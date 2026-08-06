@@ -22,7 +22,7 @@ export function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-export function getTokenPayload(): { sub: string; org_id: string; role: string; name: string } | null {
+export function getTokenPayload(): { sub: string; org_id: string; role: string; name: string; email: string } | null {
   const token = getToken()
   if (!token) return null
   try {

@@ -506,7 +506,7 @@ async fn admin_tool_login_handler(
         return Err((StatusCode::UNAUTHORIZED, "パスワードが正しくありません".to_string()));
     }
 
-    let token = create_token(Uuid::nil(), Uuid::nil(), "adminTool", "", &state.jwt_secret)
+    let token = create_token(Uuid::nil(), Uuid::nil(), "adminTool", "", "", &state.jwt_secret)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(TokenResponse { token }))
@@ -752,7 +752,7 @@ async fn signup_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let token = create_token(user_id, org_id, "admin", "", &state.jwt_secret)
+    let token = create_token(user_id, org_id, "admin", "", &body.email, &state.jwt_secret)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(AuthResponse {
@@ -779,7 +779,7 @@ async fn individual_register_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let token = create_token(user_id, org_id, "individual", &body.email, &state.jwt_secret)
+    let token = create_token(user_id, org_id, "individual", "", &body.email, &state.jwt_secret)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(IndividualAuthResponse { token, is_first_login: true }))
@@ -806,7 +806,7 @@ async fn individual_login_handler(
     }
 
     let is_first_login = user.is_first_login;
-    let token = create_token(user.id, user.organization_id, "individual", &user.name, &state.jwt_secret)
+    let token = create_token(user.id, user.organization_id, "individual", &user.name, &body.email, &state.jwt_secret)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(IndividualAuthResponse { token, is_first_login }))
@@ -896,7 +896,7 @@ async fn login_handler(
         }
     }
 
-    let token = create_token(user.id, user.organization_id, &user.role, &user.name, &state.jwt_secret)
+    let token = create_token(user.id, user.organization_id, &user.role, &user.name, &body.login_id, &state.jwt_secret)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(AuthResponse {
