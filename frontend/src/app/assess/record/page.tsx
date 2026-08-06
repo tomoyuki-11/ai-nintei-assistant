@@ -278,6 +278,9 @@ useEffect(() => {
   async function handleRecoverAndFormat() {
     const currentText = await recoverAndTranscribe()
     if (!currentText.trim()) return
+    localStorage.setItem('pipeline_pending', '1')
+    localStorage.setItem('pipeline_text', currentText)
+    setPipelinePending(true)
     const id = await saveTranscription(currentText)
     await formatText(currentText, id)
   }
