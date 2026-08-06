@@ -28,6 +28,7 @@ type RecordingContextType = {
   clearPendingAudio: () => void
   clearRecording: () => void
   getAudioUploadPromise: () => Promise<string | null>
+  retryAudioUpload: () => Promise<boolean>
 }
 
 const RecordingContext = createContext<RecordingContextType | null>(null)
@@ -716,6 +717,18 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     setPendingAudio(null)
   }, [])
 
+  // pendingAudioの音声をサーバーへアップロード（オンライン復帰時の再試行用）
+  const retryAudioUpload = useCallback(async (): Promise<boolean> => {
+    const blob = downloadableAudio
+    if (!blob) return false
+    const path = await uploadAudioToServer(blob, blob.type || 'audio/webm')
+    if (path) {
+      audioUploadPromiseRef.current = Promise.resolve(path)
+      return true
+    }
+    return false
+  }, [downloadableAudio, uploadAudioToServer])
+
   const clearRecording = useCallback(() => {
     setText('')
     localStorage.removeItem(DRAFT_KEY)
@@ -752,6 +765,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       clearPendingAudio,
       clearRecording,
       getAudioUploadPromise: () => audioUploadPromiseRef.current,
+      retryAudioUpload,
     }}>
       {children}
     </RecordingContext.Provider>

@@ -20,7 +20,7 @@ export default function RecordPage() {
     startRecording, stopRecording, pauseRecording, resumeRecording,
     retryTranscription, recoverAndTranscribe, getRecoveryBlob, discardRecovery,
     transcribeFile, transcribeBlob, downloadAudio, clearPendingAudio, clearRecording,
-    getAudioUploadPromise,
+    getAudioUploadPromise, retryAudioUpload,
   } = useRecording()
 
   const continuationRef = useRef<Blob | null>(null)
@@ -40,6 +40,8 @@ export default function RecordPage() {
   const [autoLockDontShow, setAutoLockDontShow] = useState(false)
 const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
   const [isPageHidden, setIsPageHidden] = useState(false)
+  const [isOnline, setIsOnline] = useState(() => typeof window !== 'undefined' ? navigator.onLine : true)
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'failed'>('idle')
   const savedIdRef = useRef<string | null>(null)
   const recordedThisSessionRef = useRef(false)
 
@@ -48,6 +50,32 @@ const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
     setText('')
     window.scrollTo(0, 0)
   }, [router, setText])
+
+  // オンライン/オフライン状態の監視
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true)
+    const onOffline = () => { setIsOnline(false); setUploadState('idle') }
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+  }, [])
+
+  // オンライン復帰時にpendingAudioをサーバーへ自動アップロード
+  useEffect(() => {
+    if (!isOnline || !pendingAudio || uploadState !== 'idle') return
+    setUploadState('uploading')
+    retryAudioUpload().then(success => {
+      setUploadState(success ? 'done' : 'failed')
+    })
+  }, [isOnline, pendingAudio, uploadState, retryAudioUpload])
+
+  // pendingAudioがクリアされたらuploadStateをリセット
+  useEffect(() => {
+    if (!pendingAudio) setUploadState('idle')
+  }, [pendingAudio])
 
   useEffect(() => {
     const ua = navigator.userAgent
@@ -427,11 +455,25 @@ useEffect(() => {
         {/* 文字起こし失敗時のリトライ */}
         {pendingAudio && !result && (
           <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-4">
-            <p className="text-xs font-medium text-orange-800 mb-2">録音済み音声があります</p>
-            <div className="flex gap-2">
-              <button onClick={handleRetryFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">録音済み音声を文字起こし・整形する</button>
-              <button onClick={clearPendingAudio} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">破棄</button>
-            </div>
+            {!isOnline ? (
+              <>
+                <p className="text-xs font-medium text-orange-800 mb-1">整形待ちのデータがあります</p>
+                <p className="text-xs text-orange-700">オンラインになれば作業を再開できます</p>
+              </>
+            ) : uploadState === 'uploading' ? (
+              <>
+                <p className="text-xs font-medium text-orange-800 mb-1">整形待ちのデータをアップロード中です</p>
+                <p className="text-xs text-orange-600">しばらくお待ちください...</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-medium text-orange-800 mb-2">録音済み音声があります</p>
+                <div className="flex gap-2">
+                  <button onClick={handleRetryFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">録音済み音声を文字起こし・整形する</button>
+                  <button onClick={clearPendingAudio} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">破棄</button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
