@@ -429,7 +429,7 @@ useEffect(() => {
           <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-4">
             <p className="text-xs font-medium text-orange-800 mb-2">録音済み音声があります</p>
             <div className="flex gap-2">
-              <button onClick={handleRetryFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">再度整形する</button>
+              <button onClick={handleRetryFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">録音済み音声を文字起こし・整形する</button>
               <button onClick={clearPendingAudio} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">破棄</button>
             </div>
           </div>
