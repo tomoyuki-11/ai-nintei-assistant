@@ -20,7 +20,7 @@ export default function TopNav() {
   return (
     <div className="flex items-center gap-2">
       {email && (
-        <span className="text-xs text-gray-500 hidden sm:block">{email}</span>
+        <span className="text-xs text-gray-500">{email}</span>
       )}
       <Link
         href="/history"
