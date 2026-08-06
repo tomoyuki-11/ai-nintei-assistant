@@ -42,8 +42,6 @@ const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
   const [isPageHidden, setIsPageHidden] = useState(false)
   const [isOnline, setIsOnline] = useState(() => typeof window !== 'undefined' ? navigator.onLine : true)
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'failed'>('idle')
-  const savedIdRef = useRef<string | null>(null)
-  const recordedThisSessionRef = useRef(false)
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
@@ -248,7 +246,6 @@ useEffect(() => {
   }
 
   async function handleStopRecording() {
-    recordedThisSessionRef.current = true
     const localCont = continuationRef.current
     continuationRef.current = null
 
@@ -263,7 +260,6 @@ useEffect(() => {
       setText(combinedText)
       localStorage.setItem('pipeline_text', combinedText)
       const id = await saveTranscription(combinedText)
-      savedIdRef.current = id
       await formatText(combinedText, id)
       return
     }
@@ -271,7 +267,6 @@ useEffect(() => {
     if (!newText.trim()) return
     localStorage.setItem('pipeline_text', newText)
     const id = await saveTranscription(newText)
-    savedIdRef.current = id
     await formatText(newText, id)
   }
 
@@ -295,7 +290,6 @@ useEffect(() => {
     if (!savedText && text) localStorage.setItem('pipeline_text', text)
     // pipeline_pending・pipelinePendingはformatText成功時にクリアする（整形失敗時もバナーを維持するため）
     const id = await saveTranscription(text)
-    savedIdRef.current = id
     await formatText(text, id)
   }
 
@@ -314,7 +308,6 @@ useEffect(() => {
   function handleNewRecording() {
     setResult('')
     setError('')
-    savedIdRef.current = null
     clearRecording()
   }
 
@@ -430,7 +423,7 @@ useEffect(() => {
         </div>
 
         {/* リカバリバナー（録音中断） */}
-        {hasPendingRecovery && !result && (
+        {hasPendingRecovery && !pendingAudio && !result && (
           <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-4">
             <p className="text-xs font-medium text-orange-800 mb-1">前回の録音データが見つかりました</p>
             <p className="text-xs text-orange-700 mb-2">リロード前の録音音声が保存されています。どうしますか？</p>
