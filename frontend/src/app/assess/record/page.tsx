@@ -558,8 +558,11 @@ useEffect(() => {
 
                     {/* サブアクション */}
                     <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
-                      <button onClick={downloadAudio} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
-                        音声をダウンロード (.{getExtFromMime(downloadableAudio.type)})
+                      <button onClick={async () => {
+                        try { await downloadAudio() }
+                        catch (e) { setError(`ダウンロード失敗: ${e instanceof Error ? e.message : String(e)}`) }
+                      }} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                        音声をダウンロード (.{getExtFromMime(downloadableAudio.type)}) [{(downloadableAudio.size / 1024 / 1024).toFixed(1)}MB]
                       </button>
                       <button onClick={() => { clearRecording(); setUploadState('idle') }} className="ml-auto text-xs text-gray-400 hover:text-red-500 transition-colors">
                         破棄

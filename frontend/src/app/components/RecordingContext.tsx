@@ -256,26 +256,26 @@ async function uploadInChunks(
   headers: Record<string, string>
 ): Promise<string | null> {
   const uploadId = crypto.randomUUID()
-  const totalChunks = Math.ceil(blob.size / UPLOAD_CHUNK_SIZE)
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+
+  // iOS: IndexedDB blob の slice() も fetch body に使えないため
+  // 全体を一度 ArrayBuffer に読み込んでインメモリ blob を作成してからチャンク分割する
+  let workingBlob = blob
+  if (isIOS) {
+    try {
+      const buffer = await readAsArrayBuffer(blob)
+      workingBlob = new Blob([buffer], { type: mimeType })
+    } catch {
+      return null
+    }
+  }
+
+  const totalChunks = Math.ceil(workingBlob.size / UPLOAD_CHUNK_SIZE)
+  if (totalChunks === 0) return null
 
   for (let i = 0; i < totalChunks; i++) {
     const start = i * UPLOAD_CHUNK_SIZE
-    const slice = blob.slice(start, Math.min(start + UPLOAD_CHUNK_SIZE, blob.size))
-
-    // iOS では IndexedDB blob の slice を fetch body に直接渡せないため
-    // FileReader で ArrayBuffer に変換してから送信する
-    let body: ArrayBuffer | Blob
-    if (isIOS) {
-      try {
-        body = await readAsArrayBuffer(slice)
-      } catch {
-        return null
-      }
-    } else {
-      body = slice
-    }
-
+    const chunk = workingBlob.slice(start, Math.min(start + UPLOAD_CHUNK_SIZE, workingBlob.size))
     try {
       const res = await fetch(`${apiUrl}/api/audio-upload/chunk`, {
         method: 'POST',
@@ -286,7 +286,7 @@ async function uploadInChunks(
           'X-Chunk-Index': String(i),
           'X-Total-Chunks': String(totalChunks),
         },
-        body,
+        body: chunk,
       })
       if (!res.ok) return null
       const data = await res.json()
@@ -785,12 +785,17 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     if (isIOS) {
       // IndexedDB から復元した大容量 Blob は iOS Safari で Web Share API / blob URL に直接使えない
       // FileReader でメモリ上に読み込み直して新しいインメモリ Blob を作成してから使用する
-      let blobToUse = downloadableAudio
+      let blobToUse: Blob
       try {
         const buffer = await readAsArrayBuffer(downloadableAudio)
         blobToUse = new Blob([buffer], { type: downloadableAudio.type || 'audio/mp4' })
-      } catch {
-        // FileReader 失敗時は元の blob にフォールバック
+      } catch (e) {
+        // FileReader 失敗 = データにアクセスできない
+        throw new Error(`音声データの読み込みに失敗しました (${(e as Error).message || 'FileReader error'})`)
+      }
+
+      if (blobToUse.size === 0) {
+        throw new Error(`音声データが空です (元のサイズ: ${downloadableAudio.size} bytes)`)
       }
 
       if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
@@ -803,6 +808,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
             return
           } catch (e) {
             if ((e as Error).name === 'AbortError') return  // ユーザーがキャンセル
+            // Web Share 失敗: blob URL にフォールバック
           }
         }
       }
