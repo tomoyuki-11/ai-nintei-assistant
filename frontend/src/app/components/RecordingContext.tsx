@@ -238,6 +238,17 @@ const WHISPER_RETRY_DELAYS = [10000, 30000, 60000]
 
 const UPLOAD_CHUNK_SIZE = 3 * 1024 * 1024  // 3MB
 
+// IndexedDB から復元した Blob は iOS Safari で fetch body / blob URL に直接使えないため
+// FileReader 経由で ArrayBuffer としてメモリに読み込んでから使用する
+function readAsArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as ArrayBuffer)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsArrayBuffer(blob)
+  })
+}
+
 async function uploadInChunks(
   blob: Blob,
   mimeType: string,
@@ -246,10 +257,25 @@ async function uploadInChunks(
 ): Promise<string | null> {
   const uploadId = crypto.randomUUID()
   const totalChunks = Math.ceil(blob.size / UPLOAD_CHUNK_SIZE)
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
 
   for (let i = 0; i < totalChunks; i++) {
     const start = i * UPLOAD_CHUNK_SIZE
-    const chunk = blob.slice(start, start + UPLOAD_CHUNK_SIZE)
+    const slice = blob.slice(start, Math.min(start + UPLOAD_CHUNK_SIZE, blob.size))
+
+    // iOS では IndexedDB blob の slice を fetch body に直接渡せないため
+    // FileReader で ArrayBuffer に変換してから送信する
+    let body: ArrayBuffer | Blob
+    if (isIOS) {
+      try {
+        body = await readAsArrayBuffer(slice)
+      } catch {
+        return null
+      }
+    } else {
+      body = slice
+    }
+
     try {
       const res = await fetch(`${apiUrl}/api/audio-upload/chunk`, {
         method: 'POST',
@@ -260,7 +286,7 @@ async function uploadInChunks(
           'X-Chunk-Index': String(i),
           'X-Total-Chunks': String(totalChunks),
         },
-        body: chunk,
+        body,
       })
       if (!res.ok) return null
       const data = await res.json()
@@ -757,10 +783,19 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
 
     if (isIOS) {
-      // iOS Safari: Web Share API でファイル共有（大容量 Blob でも WebKitBlobResourceError が起きない）
+      // IndexedDB から復元した大容量 Blob は iOS Safari で Web Share API / blob URL に直接使えない
+      // FileReader でメモリ上に読み込み直して新しいインメモリ Blob を作成してから使用する
+      let blobToUse = downloadableAudio
+      try {
+        const buffer = await readAsArrayBuffer(downloadableAudio)
+        blobToUse = new Blob([buffer], { type: downloadableAudio.type || 'audio/mp4' })
+      } catch {
+        // FileReader 失敗時は元の blob にフォールバック
+      }
+
       if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
-        const file = new File([downloadableAudio], `recording_${ts}.${ext}`, {
-          type: downloadableAudio.type || 'audio/mp4',
+        const file = new File([blobToUse], `recording_${ts}.${ext}`, {
+          type: blobToUse.type || 'audio/mp4',
         })
         if (navigator.canShare({ files: [file] })) {
           try {
@@ -771,8 +806,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           }
         }
       }
-      // Web Share API 非対応 or ファイル共有不可の場合: blob URL にフォールバック（小さいファイルなら動作）
-      const url = URL.createObjectURL(downloadableAudio)
+      // Web Share API 非対応 or ファイル共有不可の場合: インメモリ blob の blob URL にフォールバック
+      const url = URL.createObjectURL(blobToUse)
       const a = document.createElement('a')
       a.href = url
       a.target = '_blank'
