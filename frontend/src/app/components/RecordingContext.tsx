@@ -61,10 +61,14 @@ function openRecoveryDB(): Promise<IDBDatabase> {
 
 async function saveDownloadableAudio(blob: Blob): Promise<void> {
   try {
+    // iOS Safari は Blob を IndexedDB に保存すると OS の temp file として保存する
+    // iOS が temp file を削除すると "The object can not be found here" になりデータにアクセスできなくなる
+    // ArrayBuffer として値でコピーして保存することで OS による削除を防ぐ
+    const buffer = await readAsArrayBuffer(blob)
     const db = await openRecoveryDB()
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(DOWNLOAD_STORE, 'readwrite')
-      tx.objectStore(DOWNLOAD_STORE).put(blob, 'audio')
+      tx.objectStore(DOWNLOAD_STORE).put({ buffer, type: blob.type }, 'audio')
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
     })
@@ -75,14 +79,19 @@ async function saveDownloadableAudio(blob: Blob): Promise<void> {
 async function getDownloadableAudio(): Promise<Blob | null> {
   try {
     const db = await openRecoveryDB()
-    const blob: Blob | undefined = await new Promise((resolve, reject) => {
+    const data: unknown = await new Promise((resolve, reject) => {
       const tx = db.transaction(DOWNLOAD_STORE, 'readonly')
       const req = tx.objectStore(DOWNLOAD_STORE).get('audio')
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
     db.close()
-    return blob ?? null
+    if (!data) return null
+    // 旧形式: Blob として保存されている場合（移行期の互換対応）
+    if (data instanceof Blob) return data
+    // 新形式: { buffer: ArrayBuffer, type: string } として保存されている場合
+    const { buffer, type } = data as { buffer: ArrayBuffer; type: string }
+    return new Blob([buffer], { type: type || 'audio/mp4' })
   } catch {
     return null
   }
@@ -103,10 +112,11 @@ async function clearDownloadableAudio(): Promise<void> {
 
 async function savePendingAudioToDB(blob: Blob): Promise<void> {
   try {
+    const buffer = await readAsArrayBuffer(blob)
     const db = await openRecoveryDB()
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(DOWNLOAD_STORE, 'readwrite')
-      tx.objectStore(DOWNLOAD_STORE).put(blob, 'pending')
+      tx.objectStore(DOWNLOAD_STORE).put({ buffer, type: blob.type }, 'pending')
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
     })
@@ -117,14 +127,17 @@ async function savePendingAudioToDB(blob: Blob): Promise<void> {
 async function getPendingAudioFromDB(): Promise<Blob | null> {
   try {
     const db = await openRecoveryDB()
-    const blob: Blob | undefined = await new Promise((resolve, reject) => {
+    const data: unknown = await new Promise((resolve, reject) => {
       const tx = db.transaction(DOWNLOAD_STORE, 'readonly')
       const req = tx.objectStore(DOWNLOAD_STORE).get('pending')
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
     db.close()
-    return blob ?? null
+    if (!data) return null
+    if (data instanceof Blob) return data
+    const { buffer, type } = data as { buffer: ArrayBuffer; type: string }
+    return new Blob([buffer], { type: type || 'audio/mp4' })
   } catch {
     return null
   }
