@@ -650,7 +650,11 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
     const audioToUpload = pendingAudio
     setPendingAudio(null)
-    audioUploadPromiseRef.current = uploadAudioToServer(audioToUpload, audioToUpload.type || 'audio/webm')
+    // 自動アップロードが既に成功済みの場合は上書きしない（アップロード競合を防ぐ）
+    const existingPath = await audioUploadPromiseRef.current
+    if (!existingPath) {
+      audioUploadPromiseRef.current = uploadAudioToServer(audioToUpload, audioToUpload.type || 'audio/webm')
+    }
     return appendTranscription(transcribed)
   }, [pendingAudio, callWhisper, appendTranscription, uploadAudioToServer])
 
