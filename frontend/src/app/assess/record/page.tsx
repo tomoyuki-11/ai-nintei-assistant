@@ -18,12 +18,11 @@ export default function RecordPage() {
     setText, recordingError, setRecordingError,
     pendingAudio, downloadableAudio, hasPendingRecovery,
     startRecording, stopRecording, pauseRecording, resumeRecording,
-    retryTranscription, recoverAndTranscribe, getRecoveryBlob, discardRecovery,
-    transcribeFile, transcribeBlob, downloadAudio, clearPendingAudio, clearRecording,
+    transcribeRecording, retryTranscription, recoverAndTranscribe, discardRecovery,
+    transcribeFile, downloadAudio, clearPendingAudio, clearRecording,
     getAudioUploadPromise, retryAudioUpload,
   } = useRecording()
 
-  const continuationRef = useRef<Blob | null>(null)
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null)
 
   const [result, setResult] = useState('')
@@ -61,19 +60,15 @@ const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
     }
   }, [])
 
-  // オンライン復帰時にpendingAudioをサーバーへ自動アップロード
+  // downloadableAudioがクリアされたらuploadStateをリセット
   useEffect(() => {
-    if (!isOnline || !pendingAudio || uploadState !== 'idle') return
-    setUploadState('uploading')
-    retryAudioUpload().then(success => {
-      setUploadState(success ? 'done' : 'failed')
-    })
-  }, [isOnline, pendingAudio, uploadState, retryAudioUpload])
+    if (!downloadableAudio) setUploadState('idle')
+  }, [downloadableAudio])
 
-  // pendingAudioがクリアされたらuploadStateをリセット
+  // 新しい録音開始時にuploadStateをリセット
   useEffect(() => {
-    if (!pendingAudio) setUploadState('idle')
-  }, [pendingAudio])
+    if (isRecording) setUploadState('idle')
+  }, [isRecording])
 
   useEffect(() => {
     const ua = navigator.userAgent
@@ -246,28 +241,24 @@ useEffect(() => {
   }
 
   async function handleStopRecording() {
-    const localCont = continuationRef.current
-    continuationRef.current = null
+    await stopRecording()
+    // UIがdownloadableAudioを検知してアップロードボタンを表示する
+  }
 
-    const newText = await stopRecording()
+  async function handleUpload() {
+    setUploadState('uploading')
+    const success = await retryAudioUpload()
+    setUploadState(success ? 'done' : 'failed')
+  }
 
-    if (localCont) {
-      // 続きから録音：保存済み音声（localCont）を文字起こしして新録音テキストと結合
-      const oldText = await transcribeBlob(localCont)
-      const parts = [oldText.trim(), newText.trim()].filter(Boolean)
-      const combinedText = parts.join('\n')
-      if (!combinedText) return
-      setText(combinedText)
-      localStorage.setItem('pipeline_text', combinedText)
-      const id = await saveTranscription(combinedText)
-      await formatText(combinedText, id)
-      return
-    }
-
-    if (!newText.trim()) return
-    localStorage.setItem('pipeline_text', newText)
-    const id = await saveTranscription(newText)
-    await formatText(newText, id)
+  async function handleTranscribeAndFormat() {
+    const currentText = await transcribeRecording()
+    if (!currentText.trim()) return
+    localStorage.setItem('pipeline_pending', '1')
+    localStorage.setItem('pipeline_text', currentText)
+    setPipelinePending(true)
+    const id = await saveTranscription(currentText)
+    await formatText(currentText, id)
   }
 
   async function handleRecoverAndFormat() {
@@ -429,7 +420,7 @@ useEffect(() => {
             <p className="text-xs text-orange-700 mb-2">リロード前の録音音声が保存されています。どうしますか？</p>
             <div className="flex gap-2 flex-wrap">
               <button onClick={handleRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">整形する</button>
-              <button onClick={async () => { const blob = await getRecoveryBlob(); if (blob) continuationRef.current = blob; startRecording() }} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
+              <button onClick={() => { discardRecovery(); handleStartRecordingClick() }} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
               <button onClick={discardRecovery} disabled={isBusy} className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors">破棄</button>
             </div>
           </div>
@@ -442,7 +433,7 @@ useEffect(() => {
             <p className="text-xs text-orange-700 mb-2">文字起こしまたは整形の途中でリロードされました。録音音声は保存されています。どうしますか？</p>
             <div className="flex gap-2 flex-wrap">
               <button onClick={handlePipelineRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">整形する</button>
-              <button onClick={() => { continuationRef.current = downloadableAudio; setPipelinePending(false); startRecording() }} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
+              <button onClick={() => { setPipelinePending(false); localStorage.removeItem('pipeline_pending'); localStorage.removeItem('pipeline_text'); handleStartRecordingClick() }} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
               <button onClick={() => { setPipelinePending(false); localStorage.removeItem('pipeline_pending'); localStorage.removeItem('pipeline_text'); clearRecording() }} disabled={isBusy} className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors">破棄</button>
             </div>
           </div>
@@ -517,30 +508,92 @@ useEffect(() => {
               </div>
             )}
 
-            {/* 録音UI */}
+            {/* 録音UI / アップロード・文字起こしステップ */}
             {!isBusy && (
               <div className="rounded-xl bg-white border border-gray-200 p-6 shadow-sm">
-                <div className="flex flex-wrap items-center gap-3">
-                  {!isRecording ? (
-                    <button onClick={handleStartRecordingClick} className="flex items-center gap-2 rounded-full bg-red-500 px-5 py-2.5 text-sm text-white font-medium hover:bg-red-600 transition-colors">
-                      <span className="inline-block w-3 h-3 rounded-full bg-white" /> 録音開始
-                    </button>
-                  ) : (
-                    <button onClick={handleStopRecording} className="flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-sm text-white font-medium animate-pulse">
-                      <span className="inline-block w-3 h-3 rounded-sm bg-white" /> 録音停止
-                    </button>
-                  )}
-                  {isRecording && !isIOS && (
-                    <button onClick={isPaused ? resumeRecording : pauseRecording} className="rounded-full border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-                      {isPaused ? '再開' : '一時停止'}
-                    </button>
-                  )}
-                  {isRecording && <span className="text-xs text-red-500 font-medium animate-pulse">録音中...</span>}
-                  {isRecording && showScreenWarning && <span className="text-xs text-orange-500 font-medium">⚠ 画面をオンのまま</span>}
-                  {isRecording && isMobile && !isIOS && <span className="text-xs text-orange-500 font-medium">⚠ リロードで停止します</span>}
-                </div>
-                {!isRecording && (
-                  <p className="text-xs text-gray-400 mt-3">録音停止後、自動で文字起こし・整形が行われます</p>
+                {/* 録音完了後のアップロード→文字起こしステップ */}
+                {!isRecording && downloadableAudio && !pipelinePending && !hasPendingRecovery && !pendingAudio ? (
+                  <div className="space-y-5">
+                    <p className="text-sm font-semibold text-gray-800">録音が完了しました</p>
+
+                    {/* STEP 1: アップロード */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-gray-400 tracking-wide">STEP 1 — 音声をアップロード</p>
+                      {uploadState === 'done' ? (
+                        <p className="text-sm text-green-600 font-medium">✓ アップロード完了</p>
+                      ) : uploadState === 'uploading' ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <div className="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                          アップロード中...
+                        </div>
+                      ) : (
+                        <>
+                          {uploadState === 'failed' && (
+                            <p className="text-xs text-red-600 mb-1">アップロードに失敗しました。再度お試しください。</p>
+                          )}
+                          {!isOnline && (
+                            <p className="text-xs text-orange-600 mb-1">オフラインです。オンラインに戻ったらアップロードしてください。</p>
+                          )}
+                          <button
+                            onClick={handleUpload}
+                            disabled={!isOnline}
+                            className="flex items-center gap-2 rounded-full bg-blue-500 px-5 py-2.5 text-sm text-white font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            音声をアップロード
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* STEP 2: 文字起こし・整形（アップロード完了後に表示） */}
+                    {uploadState === 'done' && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-gray-400 tracking-wide">STEP 2 — 文字起こし・整形</p>
+                        <button
+                          onClick={handleTranscribeAndFormat}
+                          className="flex items-center gap-2 rounded-full bg-green-500 px-5 py-2.5 text-sm text-white font-medium hover:bg-green-600 transition-colors"
+                        >
+                          文字起こし・整形する
+                        </button>
+                      </div>
+                    )}
+
+                    {/* サブアクション */}
+                    <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
+                      <button onClick={downloadAudio} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                        音声をダウンロード (.{getExtFromMime(downloadableAudio.type)})
+                      </button>
+                      <button onClick={() => { clearRecording(); setUploadState('idle') }} className="ml-auto text-xs text-gray-400 hover:text-red-500 transition-colors">
+                        破棄
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* 通常の録音UI */
+                  <div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {!isRecording ? (
+                        <button onClick={handleStartRecordingClick} className="flex items-center gap-2 rounded-full bg-red-500 px-5 py-2.5 text-sm text-white font-medium hover:bg-red-600 transition-colors">
+                          <span className="inline-block w-3 h-3 rounded-full bg-white" /> 録音開始
+                        </button>
+                      ) : (
+                        <button onClick={handleStopRecording} className="flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-sm text-white font-medium animate-pulse">
+                          <span className="inline-block w-3 h-3 rounded-sm bg-white" /> 録音停止
+                        </button>
+                      )}
+                      {isRecording && !isIOS && (
+                        <button onClick={isPaused ? resumeRecording : pauseRecording} className="rounded-full border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                          {isPaused ? '再開' : '一時停止'}
+                        </button>
+                      )}
+                      {isRecording && <span className="text-xs text-red-500 font-medium animate-pulse">録音中...</span>}
+                      {isRecording && showScreenWarning && <span className="text-xs text-orange-500 font-medium">⚠ 画面をオンのまま</span>}
+                      {isRecording && isMobile && !isIOS && <span className="text-xs text-orange-500 font-medium">⚠ リロードで停止します</span>}
+                    </div>
+                    {!isRecording && (
+                      <p className="text-xs text-gray-400 mt-3">録音停止後、音声のアップロードと文字起こし・整形を手動で行えます</p>
+                    )}
+                  </div>
                 )}
               </div>
             )}

@@ -20,6 +20,7 @@ type RecordingContextType = {
   resumeRecording: () => void
   transcribeFile: (file: File | Blob) => Promise<string>
   transcribeBlob: (blob: Blob) => Promise<string>
+  transcribeRecording: () => Promise<string>
   retryTranscription: () => Promise<string>
   recoverAndTranscribe: () => Promise<string>
   getRecoveryBlob: () => Promise<Blob | null>
@@ -465,6 +466,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('pipeline_text')
     setText('')
     localStorage.removeItem(DRAFT_KEY)
+    audioUploadPromiseRef.current = Promise.resolve(null)
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -558,9 +560,9 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
 
     return new Promise((resolve) => {
-      userStoppedRef.current = true  // ユーザー操作による正常停止フラグ
+      userStoppedRef.current = true
       mediaRecorder.onstop = async () => {
-        userStoppedRef.current = false  // 次の録音のためリセット
+        userStoppedRef.current = false
         streamRef.current?.getTracks().forEach((t) => t.stop())
         setIsRecording(false)
         setIsPaused(false)
@@ -570,47 +572,16 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
         const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
         const mimeType = chunksRef.current[0]?.type || (isIOS ? 'audio/mp4' : 'audio/webm')
+        const recordedBlob = new Blob(chunksRef.current, { type: mimeType })
+        setDownloadableAudio(recordedBlob)
+        // chunksRef はここでは破棄しない（transcribeRecording で利用する）
 
-        // 文字起こし開始前に音声をIndexedDBへ保存し、パイプライン中リロード時のリカバリに備える
-        const preSaveBlob = new Blob(chunksRef.current, { type: mimeType })
-        setDownloadableAudio(preSaveBlob)
-        localStorage.setItem('pipeline_pending', '1')
-
-        // 録音停止直後にサーバーへアップロード開始（Whisper失敗時も音声を保護）
-        audioUploadPromiseRef.current = uploadAudioToServer(preSaveBlob, mimeType)
-
-        // オフライン時は文字起こしをスキップして即座にpendingAudioをセット（100秒待たせない）
-        if (!navigator.onLine) {
-          setPendingAudio(preSaveBlob)
-          localStorage.removeItem('pipeline_pending')
-          resolve(textRef.current)
-          return
-        }
-
-        const { result, failedGroupBlob, fullBlob } = await transcribeChunks(
-          chunksRef.current, mimeType, callWhisper
-        )
-
-        if (result === null) {
-          setPendingAudio(failedGroupBlob ?? fullBlob)
-          localStorage.removeItem('pipeline_pending')
-          setRecordingError('文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。')
-          resolve(textRef.current)
-        } else if (result === '') {
-          localStorage.removeItem('pipeline_pending')
-          setRecordingError('音声が検出されませんでした。スリープ中は録音が途切れることがあります。画面をオンのままにしてください。')
-          resolve(textRef.current)
-        } else {
-          setPendingAudio(null)
-          // アップロードは録音停止直後に既に開始済み
-          // pipeline_pending は整形完了後に record/page.tsx 側でクリアする
-          resolve(appendTranscription(result))
-        }
+        resolve(textRef.current)
       }
 
       mediaRecorder.stop()
     })
-  }, [callWhisper, appendTranscription, uploadAudioToServer])
+  }, [])
 
   // 音声ファイルをアップロードして文字起こし（既存テキストに追記）
   const transcribeFile = useCallback(async (file: File | Blob): Promise<string> => {
@@ -657,6 +628,38 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
     return appendTranscription(transcribed)
   }, [pendingAudio, callWhisper, appendTranscription, uploadAudioToServer])
+
+  // 停止済み録音（downloadableAudio）を文字起こしする（手動アップロード後に呼ぶ）
+  const transcribeRecording = useCallback(async (): Promise<string> => {
+    const blob = downloadableAudio
+    if (!blob) return textRef.current
+
+    const chunks = chunksRef.current
+    const mimeType = blob.type || 'audio/webm'
+
+    let result: string | null
+
+    if (chunks.length > 0) {
+      // 録音直後でチャンクがメモリにある場合：チャンク分割対応で送信
+      const { result: r } = await transcribeChunks(chunks, mimeType, callWhisper)
+      result = r
+    } else {
+      // リロード後などチャンクが消えた場合：フルblobを直接送信（25MB未満なら動作）
+      result = await callWithBackoff(() => callWhisper(blob))
+    }
+
+    if (result === null) {
+      setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
+      return textRef.current
+    }
+    if (result === '') {
+      setRecordingError('音声が検出されませんでした。画面をオンのままにしてください。')
+      return textRef.current
+    }
+
+    chunksRef.current = []
+    return appendTranscription(result)
+  }, [downloadableAudio, callWhisper, appendTranscription])
 
   // リロードで中断された録音をIndexedDBから復元して文字起こし
   const recoverAndTranscribe = useCallback(async (): Promise<string> => {
@@ -771,6 +774,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       resumeRecording,
       transcribeFile,
       transcribeBlob,
+      transcribeRecording,
       retryTranscription,
       recoverAndTranscribe,
       getRecoveryBlob,
