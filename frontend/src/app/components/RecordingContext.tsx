@@ -25,7 +25,7 @@ type RecordingContextType = {
   recoverAndTranscribe: () => Promise<string>
   getRecoveryBlob: () => Promise<Blob | null>
   discardRecovery: () => void
-  downloadAudio: () => void
+  downloadAudio: () => Promise<void>
   clearPendingAudio: () => void
   clearRecording: () => void
   getAudioUploadPromise: () => Promise<string | null>
@@ -234,6 +234,44 @@ function getMimeFromExt(ext: string): string {
 // 指数バックオフ: 10秒→30秒→60秒で最大3回リトライ
 const WHISPER_RETRY_DELAYS = [10000, 30000, 60000]
 
+// --- 音声チャンクアップロード（iOS Safari の大容量 Blob 制限回避） ---
+
+const UPLOAD_CHUNK_SIZE = 3 * 1024 * 1024  // 3MB
+
+async function uploadInChunks(
+  blob: Blob,
+  mimeType: string,
+  apiUrl: string,
+  headers: Record<string, string>
+): Promise<string | null> {
+  const uploadId = crypto.randomUUID()
+  const totalChunks = Math.ceil(blob.size / UPLOAD_CHUNK_SIZE)
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * UPLOAD_CHUNK_SIZE
+    const chunk = blob.slice(start, start + UPLOAD_CHUNK_SIZE)
+    try {
+      const res = await fetch(`${apiUrl}/api/audio-upload/chunk`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': mimeType,
+          'X-Upload-Id': uploadId,
+          'X-Chunk-Index': String(i),
+          'X-Total-Chunks': String(totalChunks),
+        },
+        body: chunk,
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      if (data.audio_path) return data.audio_path as string
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 async function callWithBackoff(fn: () => Promise<string | null>): Promise<string | null> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return null
   let result = await fn()
@@ -382,12 +420,22 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return HALLUCINATIONS.some((h) => t.includes(h))
   }
 
-  // 音声ファイルをサーバーへアップロード（全チャンク結合済みの fullBlob を1ファイルとして保存）
+  // 音声ファイルをサーバーへアップロード（iOS や大容量は自動でチャンク分割）
   const uploadAudioToServer = useCallback(async (blob: Blob, mimeType: string): Promise<string | null> => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/audio-upload`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL!
+      const headers = authHeaders()
+      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+
+      // iOS は Blob が大きいと fetch body でエラーになるため、常にチャンク分割
+      // 非 iOS でも 20MB 超はチャンク分割して安全に送信
+      if (isIOS || blob.size > 20 * 1024 * 1024) {
+        return await uploadInChunks(blob, mimeType, apiUrl, headers)
+      }
+
+      const res = await fetch(`${apiUrl}/api/audio-upload`, {
         method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': mimeType },
+        headers: { ...headers, 'Content-Type': mimeType },
         body: blob,
       })
       if (!res.ok) return null
@@ -702,16 +750,29 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('pipeline_pending')
   }, [])
 
-  const downloadAudio = useCallback(() => {
+  const downloadAudio = useCallback(async () => {
     if (!downloadableAudio) return
     const ext = getExtFromMime(downloadableAudio.type)
     const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-    const url = URL.createObjectURL(downloadableAudio)
     const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
 
     if (isIOS) {
-      // iOS Safari: download属性が非対応のため新タブで開く
-      // 即時revokeするとLoad failedになるため60秒後に解放
+      // iOS Safari: Web Share API でファイル共有（大容量 Blob でも WebKitBlobResourceError が起きない）
+      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
+        const file = new File([downloadableAudio], `recording_${ts}.${ext}`, {
+          type: downloadableAudio.type || 'audio/mp4',
+        })
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file] })
+            return
+          } catch (e) {
+            if ((e as Error).name === 'AbortError') return  // ユーザーがキャンセル
+          }
+        }
+      }
+      // Web Share API 非対応 or ファイル共有不可の場合: blob URL にフォールバック（小さいファイルなら動作）
+      const url = URL.createObjectURL(downloadableAudio)
       const a = document.createElement('a')
       a.href = url
       a.target = '_blank'
@@ -719,14 +780,18 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-    } else {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `recording_${ts}.${ext}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+      return
     }
+
+    // 非 iOS
+    const url = URL.createObjectURL(downloadableAudio)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `recording_${ts}.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
     setTimeout(() => URL.revokeObjectURL(url), 60000)
   }, [downloadableAudio])
 

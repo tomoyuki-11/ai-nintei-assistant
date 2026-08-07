@@ -361,6 +361,7 @@ async fn main() {
         .route("/api/transcription", post(save_transcription_handler))
         .route("/api/transcribe", post(transcribe_handler))
         .route("/api/audio-upload", post(audio_upload_handler))
+        .route("/api/audio-upload/chunk", post(audio_upload_chunk_handler))
         .route("/api/format", post(format_handler))
         .route("/api/history", get(history_handler))
         .route(
@@ -1256,6 +1257,98 @@ async fn audio_upload_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("音声ファイル保存エラー: {}", e)))?;
 
     tracing::info!("音声ファイル保存: {}", audio_filename);
+    Ok(Json(serde_json::json!({ "audio_path": audio_filename })))
+}
+
+// チャンク分割アップロード（iOS Safari の大容量 Blob 制限を回避するため）
+async fn audio_upload_chunk_handler(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    req: axum::extract::Request,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let headers = req.headers();
+
+    let upload_id_raw = headers
+        .get("X-Upload-Id")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "X-Upload-Id が必要です".to_string()))?;
+
+    // パストラバーサル対策: UUID として検証
+    let upload_id = Uuid::parse_str(upload_id_raw)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "X-Upload-Id は UUID 形式である必要があります".to_string()))?
+        .to_string();
+
+    let chunk_index: usize = headers
+        .get("X-Chunk-Index")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse().ok())
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "X-Chunk-Index が必要です".to_string()))?;
+
+    let total_chunks: usize = headers
+        .get("X-Total-Chunks")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse().ok())
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "X-Total-Chunks が必要です".to_string()))?;
+
+    if total_chunks == 0 || chunk_index >= total_chunks {
+        return Err((StatusCode::BAD_REQUEST, "チャンクインデックスが不正です".to_string()));
+    }
+
+    let content_type = headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("audio/webm")
+        .to_string();
+
+    let mime = content_type.split(';').next().unwrap_or("audio/webm").trim().to_string();
+    let ext = if mime.contains("ogg") { "ogg" }
+              else if mime.contains("flac") { "flac" }
+              else if mime.contains("m4a") { "m4a" }
+              else if mime.contains("mp4") { "mp4" }
+              else if mime.contains("mpeg") || mime.contains("mp3") { "mp3" }
+              else if mime.contains("wav") { "wav" }
+              else { "webm" };
+
+    // チャンクは 1 枚 10MB まで
+    let chunk_data = axum::body::to_bytes(req.into_body(), 10 * 1024 * 1024)
+        .await
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    if chunk_data.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "チャンクデータが空です".to_string()));
+    }
+
+    // チャンクを音声ストレージに一時保存
+    let chunk_path = format!("{}/chunk_{}_{}of{}", state.audio_storage_path, upload_id, chunk_index, total_chunks);
+    tokio::fs::write(&chunk_path, &chunk_data[..])
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("チャンク保存エラー: {}", e)))?;
+
+    // 最後のチャンクでなければ partial を返す
+    if chunk_index + 1 < total_chunks {
+        return Ok(Json(serde_json::json!({ "status": "partial" })));
+    }
+
+    // 最後のチャンク: 全チャンクを結合して音声ファイルを作成
+    let audio_uuid = Uuid::new_v4();
+    let audio_filename = format!("{}.{}", audio_uuid, ext);
+    let audio_save_path = format!("{}/{}", state.audio_storage_path, audio_filename);
+
+    let mut assembled: Vec<u8> = Vec::new();
+    for i in 0..total_chunks {
+        let p = format!("{}/chunk_{}_{}of{}", state.audio_storage_path, upload_id, i, total_chunks);
+        let chunk = tokio::fs::read(&p)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("チャンク {} 読み込みエラー: {}", i, e)))?;
+        assembled.extend_from_slice(&chunk);
+        let _ = tokio::fs::remove_file(&p).await;
+    }
+
+    tokio::fs::write(&audio_save_path, &assembled)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("音声ファイル保存エラー: {}", e)))?;
+
+    tracing::info!("チャンクアップロード完了: {} ({} チャンク, {} バイト)", audio_filename, total_chunks, assembled.len());
     Ok(Json(serde_json::json!({ "audio_path": audio_filename })))
 }
 
