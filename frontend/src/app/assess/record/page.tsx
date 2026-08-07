@@ -218,10 +218,8 @@ useEffect(() => {
       if (!res.ok) throw new Error(`エラー: ${res.status}`)
       const data = await res.json()
       setResult(data.formatted)
-      localStorage.removeItem('pipeline_pending')
-      localStorage.removeItem('pipeline_text')
+      clearRecording()  // downloadableAudio を IndexedDB ごとクリアして次回表示に残らないようにする
       setPipelinePending(false)
-      setText('')
       // 保存・課金（クライアントが結果を受け取った後に実行）
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
         method: 'POST',
