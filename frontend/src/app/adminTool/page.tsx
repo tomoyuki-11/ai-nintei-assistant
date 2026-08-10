@@ -26,6 +26,7 @@ type IndividualUser = {
   monthly_use_count: number;
   created_at: string;
   license_expires_at: string | null;
+  memo: string;
 };
 
 type Organization = {
@@ -124,6 +125,9 @@ export default function SuperAdminPage() {
   const [planSelects, setPlanSelects] = useState<Record<string, string>>({});
   const [planSaving, setPlanSaving] = useState<Record<string, boolean>>({});
   const [planMessages, setPlanMessages] = useState<Record<string, string>>({});
+  const [memoInputs, setMemoInputs] = useState<Record<string, string>>({});
+  const [memoSaving, setMemoSaving] = useState<Record<string, boolean>>({});
+  const [memoMessages, setMemoMessages] = useState<Record<string, string>>({});
 
   function copyLicenseKey(orgId: string, key: string) {
     navigator.clipboard.writeText(key);
@@ -189,6 +193,29 @@ export default function SuperAdminPage() {
       setPlanMessages((prev) => ({ ...prev, [userId]: e instanceof Error ? e.message : '失敗しました' }));
     } finally {
       setPlanSaving((prev) => ({ ...prev, [userId]: false }));
+    }
+  }
+
+  async function handleSaveMemo(userId: string) {
+    const memo = memoInputs[userId] ?? '';
+    setMemoSaving((prev) => ({ ...prev, [userId]: true }));
+    setMemoMessages((prev) => ({ ...prev, [userId]: '' }));
+    try {
+      const res = await fetch(`${API}/api/adminTool/individual-users/${userId}/memo`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...superAdminHeaders() },
+        body: JSON.stringify({ memo }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setMemoMessages((prev) => ({ ...prev, [userId]: '保存しました' }));
+      setTimeout(() => setMemoMessages((prev) => ({ ...prev, [userId]: '' })), 3000);
+      setIndividualUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, memo } : u))
+      );
+    } catch (e) {
+      setMemoMessages((prev) => ({ ...prev, [userId]: e instanceof Error ? e.message : '失敗しました' }));
+    } finally {
+      setMemoSaving((prev) => ({ ...prev, [userId]: false }));
     }
   }
 
@@ -473,7 +500,8 @@ export default function SuperAdminPage() {
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">トライアル期限</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">登録日</th>
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">開発のためのプラン変更<span className="font-normal text-gray-500 ml-1">（※変更による料金は発生しない）</span></th>
-                        <th className="text-left px-4 py-2 font-bold">クレジット追加</th>
+                        <th className="text-left px-4 py-2 font-bold border-r border-gray-300">クレジット追加</th>
+                        <th className="text-left px-4 py-2 font-bold">備考</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -531,7 +559,7 @@ export default function SuperAdminPage() {
                               </p>
                             )}
                           </td>
-                          <td className="px-4 py-2">
+                          <td className="px-4 py-2 border-r border-gray-200">
                             <div className="flex items-center gap-2">
                               <input
                                 type="number"
@@ -557,6 +585,33 @@ export default function SuperAdminPage() {
                                 {creditMessages[user.id]}
                               </p>
                             )}
+                          </td>
+                          <td className="px-4 py-2 min-w-[200px]">
+                            <div className="flex flex-col gap-1">
+                              <textarea
+                                rows={2}
+                                value={memoInputs[user.id] ?? user.memo}
+                                onChange={(e) => setMemoInputs((prev) => ({ ...prev, [user.id]: e.target.value }))}
+                                placeholder="備考を入力..."
+                                className="w-full border border-gray-400 px-2 py-1 text-xs bg-white text-gray-900 focus:outline-none focus:border-gray-600 resize-none"
+                                style={{ borderRadius: 0 }}
+                              />
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleSaveMemo(user.id)}
+                                  disabled={memoSaving[user.id] || (memoInputs[user.id] ?? user.memo) === user.memo}
+                                  className="border border-gray-400 bg-gray-200 hover:bg-gray-300 active:bg-gray-400 px-3 py-1 text-xs font-bold text-gray-800 disabled:opacity-40"
+                                  style={{ borderRadius: 0 }}
+                                >
+                                  {memoSaving[user.id] ? '...' : '保存'}
+                                </button>
+                                {memoMessages[user.id] && (
+                                  <span className={`text-xs ${memoMessages[user.id] === '保存しました' ? 'text-green-700' : 'text-red-700'}`}>
+                                    {memoMessages[user.id]}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </td>
                         </tr>
                       ))}

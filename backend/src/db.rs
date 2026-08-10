@@ -595,13 +595,14 @@ pub struct IndividualUserAdmin {
     pub monthly_use_count: i32,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub license_expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub memo: String,
 }
 
 pub async fn list_individual_users(pool: &PgPool) -> Result<Vec<IndividualUserAdmin>, sqlx::Error> {
     sqlx::query_as::<_, IndividualUserAdmin>(
         "SELECT u.id, u.email, o.plan, COALESCE(o.metered_credits, 0) as credits,
                 COALESCE(uc.count, 0) as monthly_use_count,
-                u.created_at, o.license_expires_at
+                u.created_at, o.license_expires_at, u.memo
          FROM users u
          JOIN organizations o ON o.id = u.organization_id
          LEFT JOIN usage_counts uc ON uc.organization_id = o.id AND uc.year_month = TO_CHAR(NOW(), 'YYYY-MM')
@@ -610,6 +611,17 @@ pub async fn list_individual_users(pool: &PgPool) -> Result<Vec<IndividualUserAd
     )
     .fetch_all(pool)
     .await
+}
+
+pub async fn update_individual_user_memo(pool: &PgPool, user_id: Uuid, memo: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE users SET memo = $1 WHERE id = $2 AND role = 'individual'",
+    )
+    .bind(memo)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 pub async fn add_credits_for_individual_user(pool: &PgPool, user_id: Uuid, amount: i32) -> Result<(), sqlx::Error> {

@@ -340,6 +340,7 @@ async fn main() {
         .route("/api/adminTool/individual-users", get(admin_tool_list_individual_users_handler))
         .route("/api/adminTool/individual-users/{user_id}/add-credits", post(admin_tool_add_credits_handler))
         .route("/api/adminTool/individual-users/{user_id}/change-plan", post(admin_tool_change_plan_handler))
+        .route("/api/adminTool/individual-users/{user_id}/memo", axum::routing::patch(admin_tool_update_memo_handler))
         // 個人ユーザー
         .route("/api/individual/register", post(individual_register_handler))
         .route("/api/individual/login", post(individual_login_handler))
@@ -644,6 +645,11 @@ struct ChangePlanRequest {
     plan: String,
 }
 
+#[derive(serde::Deserialize)]
+struct UpdateMemoRequest {
+    memo: String,
+}
+
 async fn admin_tool_change_plan_handler(
     State(state): State<AppState>,
     _: AuthSuperAdmin,
@@ -655,6 +661,18 @@ async fn admin_tool_change_plan_handler(
         return Err((StatusCode::BAD_REQUEST, "無効なプランです".to_string()));
     }
     db::update_plan_for_individual_user(&state.db, user_id, &body.plan)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
+}
+
+async fn admin_tool_update_memo_handler(
+    State(state): State<AppState>,
+    _: AuthSuperAdmin,
+    Path(user_id): Path<Uuid>,
+    Json(body): Json<UpdateMemoRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    db::update_individual_user_memo(&state.db, user_id, &body.memo)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::OK)
