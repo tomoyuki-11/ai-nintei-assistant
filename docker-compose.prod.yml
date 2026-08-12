@@ -2,7 +2,7 @@ services:
   backend:
     image: rust:1.96-slim
     working_dir: /app
-    command: cargo run --release
+    command: bash -c "apt-get update -qq && apt-get install -y -qq ffmpeg && cargo run --release"
     ports:
       - "8080:8080"
     volumes:
