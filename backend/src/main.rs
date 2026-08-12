@@ -532,32 +532,30 @@ async fn transcribe_large_audio_inner(
     api_key: &str,
     audio_data: Vec<u8>,
     ext: &str,
-    whisper_mime: &str,
+    _whisper_mime: &str,
     temp_dir: &std::path::Path,
 ) -> Result<String, (StatusCode, String)> {
+    // ── Step 1: 入力ファイルをディスクに書き出す ──────────────────────────────
     let input_path = temp_dir.join(format!("input.{}", ext));
-
     tokio::fs::write(&input_path, &audio_data).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("一時ファイル書き込み失敗: {}", e)))?;
 
-    // 入力形式に関わらず 16kHz モノラル WAV に変換しながらセグメント分割する
-    // WAV (PCM) はコンテナ構造が単純なためセグメント境界が確実に有効になる
-    // 16kHz モノ 16bit: 720秒 × 16000Hz × 1ch × 2bytes = 23.0MB → Whisper 25MB 制限以内
-    let seg_pattern = temp_dir.join("seg_%04d.wav");
-    let ffmpeg_result = tokio::process::Command::new("ffmpeg")
+    // ── Step 2: ffmpeg で 16kHz モノラル WAV 1 本に変換 ──────────────────────
+    // セグメントマクサーは使わない。単純な変換コマンドで確実に動作させる。
+    let wav_path = temp_dir.join("converted.wav");
+    let ffmpeg_out = tokio::process::Command::new("ffmpeg")
         .args([
             "-i", input_path.to_str().unwrap_or(""),
-            "-ar", "16000",        // 16kHz (Whisper のネイティブサンプルレート)
-            "-ac", "1",             // モノラル（音声認識には十分）
-            "-f", "segment",
-            "-segment_time", "720", // 12 分ごとに分割 (≈23MB/セグメント)
-            "-y",                   // 出力ファイルを上書き許可
-            seg_pattern.to_str().unwrap_or(""),
+            "-ar", "16000",       // 16kHz (Whisper ネイティブレート)
+            "-ac", "1",            // モノラル
+            "-c:a", "pcm_s16le",  // 16bit リトルエンディアン PCM
+            "-y",
+            wav_path.to_str().unwrap_or(""),
         ])
         .output()
         .await;
 
-    match ffmpeg_result {
+    match ffmpeg_out {
         Err(e) => {
             tracing::error!("ffmpeg 起動失敗: {}", e);
             return Err((
@@ -566,7 +564,7 @@ async fn transcribe_large_audio_inner(
             ));
         }
         Ok(out) if !out.status.success() => {
-            tracing::error!("ffmpeg 変換エラー: {}", String::from_utf8_lossy(&out.stderr));
+            tracing::error!("ffmpeg WAV 変換失敗: {}", String::from_utf8_lossy(&out.stderr));
             return Err((
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "音声ファイルの変換に失敗しました。ファイル形式をご確認ください。".to_string(),
@@ -575,38 +573,29 @@ async fn transcribe_large_audio_inner(
         Ok(_) => {}
     }
 
-    // 生成された seg_*.wav ファイルを名前順に収集
-    let mut seg_files: Vec<std::path::PathBuf> = Vec::new();
-    let mut read_dir = tokio::fs::read_dir(temp_dir).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    while let Ok(Some(entry)) = read_dir.next_entry().await {
-        let p = entry.path();
-        if p.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("seg_")) {
-            seg_files.push(p);
-        }
-    }
-    seg_files.sort();
+    // ── Step 3: WAV ファイルを読み込み PCM データを取り出す ──────────────────
+    let wav_data = tokio::fs::read(&wav_path).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("WAV 読み込み失敗: {}", e)))?;
 
-    if seg_files.is_empty() {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, "音声セグメントの生成に失敗しました".to_string()));
-    }
+    let pcm_data = extract_wav_pcm(&wav_data)?;
+    tracing::info!("WAV 変換完了: PCM {} bytes", pcm_data.len());
 
-    tracing::info!("ffmpeg WAV 変換完了: {} セグメント", seg_files.len());
+    // ── Step 4: PCM を等サイズに分割して WAV ヘッダーを付け直す ─────────────
+    // 16kHz × 1ch × 2bytes = 32000 bytes/sec
+    // 720 秒 × 32000 = 23,040,000 bytes ≈ 22MB → Whisper 25MB 制限以内
+    const BYTES_PER_SEC: usize = 32_000;
+    const SEGMENT_BYTES: usize = 720 * BYTES_PER_SEC;
 
-    // 各 WAV セグメントを Whisper に順次送信してテキストを蓄積
+    let segments: Vec<&[u8]> = pcm_data.chunks(SEGMENT_BYTES).collect();
+    tracing::info!("PCM 分割: {} セグメント", segments.len());
+
+    // ── Step 5: 各セグメントを Whisper に送信 ────────────────────────────────
     let mut texts: Vec<String> = Vec::new();
-    for (i, seg_path) in seg_files.iter().enumerate() {
-        let seg_data = match tokio::fs::read(seg_path).await {
-            Ok(d) => d,
-            Err(e) => {
-                tracing::error!("セグメント {} 読み込み失敗: {}", i, e);
-                continue;
-            }
-        };
+    for (i, pcm_chunk) in segments.iter().enumerate() {
+        let wav_bytes = build_wav_from_pcm(pcm_chunk);
+        tracing::info!("セグメント {} 送信: {} bytes", i, wav_bytes.len());
 
-        tracing::info!("セグメント {} 送信: {} bytes", i, seg_data.len());
-
-        let part = match reqwest::multipart::Part::bytes(seg_data)
+        let part = match reqwest::multipart::Part::bytes(wav_bytes)
             .file_name(format!("segment_{}.wav", i))
             .mime_str("audio/wav")
         {
@@ -640,8 +629,8 @@ async fn transcribe_large_audio_inner(
                 }
             }
             Ok(resp) => {
-                tracing::error!("セグメント {} Whisper エラー {}: {}", i, resp.status(),
-                    resp.text().await.unwrap_or_default());
+                tracing::error!("セグメント {} Whisper エラー {}: {}",
+                    i, resp.status(), resp.text().await.unwrap_or_default());
             }
             Err(e) => {
                 tracing::error!("セグメント {} 送信エラー: {}", i, e);
@@ -654,6 +643,47 @@ async fn transcribe_large_audio_inner(
     }
 
     Ok(texts.join("\n"))
+}
+
+/// WAV バイト列から PCM データ部分だけを切り出す
+fn extract_wav_pcm(wav: &[u8]) -> Result<&[u8], (StatusCode, String)> {
+    if wav.len() < 44 || &wav[0..4] != b"RIFF" || &wav[8..12] != b"WAVE" {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "WAV フォーマット不正".to_string()));
+    }
+    // チャンクを順番に探して "data" を見つける
+    let mut pos = 12usize;
+    while pos + 8 <= wav.len() {
+        let id = &wav[pos..pos + 4];
+        let size = u32::from_le_bytes(wav[pos + 4..pos + 8].try_into().unwrap()) as usize;
+        if id == b"data" {
+            let start = pos + 8;
+            let end = (start + size).min(wav.len());
+            return Ok(&wav[start..end]);
+        }
+        pos += 8 + size;
+    }
+    Err((StatusCode::INTERNAL_SERVER_ERROR, "WAV data チャンクが見つかりません".to_string()))
+}
+
+/// 16kHz モノラル 16bit PCM データから完結した WAV バイト列を生成する
+fn build_wav_from_pcm(pcm: &[u8]) -> Vec<u8> {
+    let data_len = pcm.len() as u32;
+    let mut w = Vec::with_capacity(44 + pcm.len());
+    w.extend_from_slice(b"RIFF");
+    w.extend_from_slice(&(36u32 + data_len).to_le_bytes());
+    w.extend_from_slice(b"WAVE");
+    w.extend_from_slice(b"fmt ");
+    w.extend_from_slice(&16u32.to_le_bytes()); // fmt チャンクサイズ
+    w.extend_from_slice(&1u16.to_le_bytes());  // PCM
+    w.extend_from_slice(&1u16.to_le_bytes());  // モノラル
+    w.extend_from_slice(&16000u32.to_le_bytes()); // サンプルレート
+    w.extend_from_slice(&32000u32.to_le_bytes()); // バイトレート (16000×1×2)
+    w.extend_from_slice(&2u16.to_le_bytes());  // ブロックアライン
+    w.extend_from_slice(&16u16.to_le_bytes()); // ビット深度
+    w.extend_from_slice(b"data");
+    w.extend_from_slice(&data_len.to_le_bytes());
+    w.extend_from_slice(pcm);
+    w
 }
 
 // ─── ヘルス ───────────────────────────────────────────────────────────────────
