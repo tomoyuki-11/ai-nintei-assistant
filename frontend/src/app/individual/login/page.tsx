@@ -86,7 +86,7 @@ export default function IndividualLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 transition-colors"
             >
               {loading ? 'ログイン中...' : 'ログイン'}
             </button>
@@ -94,13 +94,14 @@ export default function IndividualLoginPage() {
 
           <div className="mt-5 pt-4 border-t border-gray-100 space-y-3 text-center">
             <p className="text-sm text-gray-500">
-              <Link href="/individual/forgot-password" className="text-gray-500 hover:underline">
-                パスワードを忘れた方はこちら
+              パスワードを忘れた方は{' '}
+              <Link href="/individual/forgot-password" className="text-blue-600 underline hover:text-blue-700 active:text-blue-800 transition-colors">
+                こちら
               </Link>
             </p>
             <p className="text-sm text-gray-500">
               アカウントをお持ちでない方は{' '}
-              <Link href="/individual/register" className="text-blue-600 hover:underline font-medium">
+              <Link href="/individual/register" className="text-blue-600 underline font-medium hover:text-blue-700 active:text-blue-800 transition-colors">
                 新規登録はこちら
               </Link>
             </p>
@@ -108,7 +109,7 @@ export default function IndividualLoginPage() {
         </div>
 
         <div className="mt-4 text-center">
-          <Link href="/start" className="text-sm text-gray-400 hover:text-gray-600 hover:underline">
+          <Link href="/start" className="text-sm text-gray-400 hover:text-gray-600 active:text-gray-700 hover:underline transition-colors">
             ← 選択画面に戻る
           </Link>
         </div>

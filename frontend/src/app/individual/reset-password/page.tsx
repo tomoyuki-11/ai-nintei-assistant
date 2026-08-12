@@ -22,7 +22,7 @@ function ResetPasswordForm() {
       <div className="text-center space-y-3 py-4">
         <p className="text-sm text-red-600 font-medium">無効なリンクです</p>
         <p className="text-xs text-gray-500">パスワードリセットのリンクが無効か、有効期限が切れています。</p>
-        <Link href="/individual/forgot-password" className="inline-block text-sm text-blue-600 hover:underline">
+        <Link href="/individual/forgot-password" className="inline-block text-sm text-blue-600 underline hover:text-blue-700 active:text-blue-800 transition-colors">
           リセットメールを再送する
         </Link>
       </div>
@@ -77,7 +77,7 @@ function ResetPasswordForm() {
         </div>
         <p className="text-sm font-medium text-gray-900">パスワードを変更しました</p>
         <p className="text-xs text-gray-500">3秒後にログイン画面へ移動します...</p>
-        <Link href="/individual/login" className="inline-block text-sm text-blue-600 hover:underline">
+        <Link href="/individual/login" className="inline-block text-sm text-blue-600 underline hover:text-blue-700 active:text-blue-800 transition-colors">
           今すぐログイン画面へ
         </Link>
       </div>
@@ -113,7 +113,7 @@ function ResetPasswordForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+        className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 transition-colors"
       >
         {loading ? '変更中...' : 'パスワードを変更する'}
       </button>
@@ -140,7 +140,7 @@ export default function ResetPasswordPage() {
         </div>
 
         <div className="mt-4 text-center">
-          <Link href="/individual/login" className="text-sm text-gray-400 hover:text-gray-600 hover:underline">
+          <Link href="/individual/login" className="text-sm text-gray-400 hover:text-gray-600 active:text-gray-700 hover:underline transition-colors">
             ← ログイン画面に戻る
           </Link>
         </div>

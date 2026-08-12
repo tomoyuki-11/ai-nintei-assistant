@@ -84,7 +84,7 @@ export default function ForgotPasswordPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 transition-colors"
                 >
                   {loading ? '送信中...' : 'リセットメールを送信'}
                 </button>
@@ -94,7 +94,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         <div className="mt-4 text-center">
-          <Link href="/individual/login" className="text-sm text-gray-400 hover:text-gray-600 hover:underline">
+          <Link href="/individual/login" className="text-sm text-gray-400 hover:text-gray-600 active:text-gray-700 hover:underline transition-colors">
             ← ログイン画面に戻る
           </Link>
         </div>
