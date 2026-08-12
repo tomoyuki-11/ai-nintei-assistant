@@ -539,6 +539,7 @@ useEffect(() => {
                           >
                             音声をアップロード
                           </button>
+                          <p className="text-xs text-gray-400 mt-1">Wi-Fi または電波の安定した環境でアップロードしてください</p>
                         </>
                       )}
                     </div>
@@ -553,6 +554,7 @@ useEffect(() => {
                         >
                           文字起こし・整形する
                         </button>
+                        <p className="text-xs text-gray-400 mt-1">1時間の音声の場合、完了まで5〜6分ほどかかります</p>
                       </div>
                     )}
 
