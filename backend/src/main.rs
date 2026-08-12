@@ -464,6 +464,14 @@ async fn transcribe_handler(
 
     tracing::info!("Whisper送信: filename={}, whisper_mime={}", filename, whisper_mime);
 
+    // Whisper の 25MB 制限を超える場合は ffmpeg で分割して順次文字起こし
+    const WHISPER_MAX_BYTES: usize = 24 * 1024 * 1024;
+    if audio_data.len() > WHISPER_MAX_BYTES {
+        tracing::info!("大容量ファイル ({} bytes): ffmpeg 分割処理を開始", audio_data.len());
+        let text = transcribe_large_audio(&state.http_client, &state.openai_api_key, audio_data, ext, whisper_mime).await?;
+        return Ok(Json(serde_json::json!({ "text": text })));
+    }
+
     let part = reqwest::multipart::Part::bytes(audio_data)
         .file_name(filename)
         .mime_str(whisper_mime)
@@ -494,6 +502,156 @@ async fn transcribe_handler(
 
     tracing::info!("Whisper 成功");
     Ok(Json(serde_json::json!({ "text": data["text"] })))
+}
+
+// ─── 大容量音声ファイルの分割文字起こし ──────────────────────────────────────────
+
+async fn transcribe_large_audio(
+    http_client: &reqwest::Client,
+    api_key: &str,
+    audio_data: Vec<u8>,
+    ext: &str,
+    whisper_mime: &str,
+) -> Result<String, (StatusCode, String)> {
+    let uid = uuid::Uuid::new_v4().to_string();
+    let temp_dir = std::env::temp_dir().join(format!("whisper_{}", uid));
+
+    tokio::fs::create_dir_all(&temp_dir).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("一時ディレクトリ作成失敗: {}", e)))?;
+
+    let result = transcribe_large_audio_inner(http_client, api_key, audio_data, ext, whisper_mime, &temp_dir).await;
+
+    // 成否にかかわらず一時ディレクトリを削除
+    tokio::fs::remove_dir_all(&temp_dir).await.ok();
+
+    result
+}
+
+async fn transcribe_large_audio_inner(
+    http_client: &reqwest::Client,
+    api_key: &str,
+    audio_data: Vec<u8>,
+    ext: &str,
+    whisper_mime: &str,
+    temp_dir: &std::path::Path,
+) -> Result<String, (StatusCode, String)> {
+    let input_path = temp_dir.join(format!("input.{}", ext));
+
+    tokio::fs::write(&input_path, &audio_data).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("一時ファイル書き込み失敗: {}", e)))?;
+
+    // ffmpeg で 8 分 (480 秒) ごとのセグメントに分割
+    // -reset_timestamps 1 で各セグメントが 0 秒始まりになるよう正規化
+    let seg_pattern = temp_dir.join(format!("seg_%04d.{}", ext));
+    let ffmpeg_result = tokio::process::Command::new("ffmpeg")
+        .args([
+            "-i", input_path.to_str().unwrap_or(""),
+            "-f", "segment",
+            "-segment_time", "480",
+            "-c", "copy",
+            "-reset_timestamps", "1",
+            seg_pattern.to_str().unwrap_or(""),
+        ])
+        .output()
+        .await;
+
+    match ffmpeg_result {
+        Err(e) => {
+            tracing::error!("ffmpeg 起動失敗: {}", e);
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "音声ファイルが25MBを超えています。ファイルを分割してから再度お試しください。".to_string(),
+            ));
+        }
+        Ok(out) if !out.status.success() => {
+            tracing::error!("ffmpeg 分割エラー: {}", String::from_utf8_lossy(&out.stderr));
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "音声ファイルの分割に失敗しました。ファイル形式をご確認ください。".to_string(),
+            ));
+        }
+        Ok(_) => {}
+    }
+
+    // 生成されたセグメントファイルを名前順に収集
+    let mut seg_files: Vec<std::path::PathBuf> = Vec::new();
+    let mut read_dir = tokio::fs::read_dir(temp_dir).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    while let Ok(Some(entry)) = read_dir.next_entry().await {
+        let p = entry.path();
+        if p.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("seg_")) {
+            seg_files.push(p);
+        }
+    }
+    seg_files.sort();
+
+    if seg_files.is_empty() {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "音声ファイルの分割に失敗しました".to_string()));
+    }
+
+    tracing::info!("ffmpeg 分割完了: {} セグメント", seg_files.len());
+
+    // 各セグメントを Whisper に順次送信してテキストを蓄積
+    let mut texts: Vec<String> = Vec::new();
+    for (i, seg_path) in seg_files.iter().enumerate() {
+        let seg_data = match tokio::fs::read(seg_path).await {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!("セグメント {} 読み込み失敗: {}", i, e);
+                continue;
+            }
+        };
+
+        tracing::info!("セグメント {} 送信: {} bytes", i, seg_data.len());
+
+        let part = match reqwest::multipart::Part::bytes(seg_data)
+            .file_name(format!("segment.{}", ext))
+            .mime_str(whisper_mime)
+        {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::error!("multipart 作成失敗: {}", e);
+                continue;
+            }
+        };
+
+        let form = reqwest::multipart::Form::new()
+            .part("file", part)
+            .text("model", "whisper-1")
+            .text("language", "ja");
+
+        match http_client
+            .post("https://api.openai.com/v1/audio/transcriptions")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .multipart(form)
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                    if let Some(t) = data["text"].as_str() {
+                        let t = t.trim();
+                        if !t.is_empty() {
+                            texts.push(t.to_string());
+                        }
+                    }
+                }
+            }
+            Ok(resp) => {
+                tracing::error!("セグメント {} Whisper エラー {}: {}", i, resp.status(),
+                    resp.text().await.unwrap_or_default());
+            }
+            Err(e) => {
+                tracing::error!("セグメント {} 送信エラー: {}", i, e);
+            }
+        }
+    }
+
+    if texts.is_empty() {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "文字起こしに失敗しました".to_string()));
+    }
+
+    Ok(texts.join("\n"))
 }
 
 // ─── ヘルス ───────────────────────────────────────────────────────────────────

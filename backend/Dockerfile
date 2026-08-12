@@ -9,7 +9,7 @@ COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
 FROM debian:bookworm-slim AS runner
-RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates libssl3 ffmpeg && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/backend /usr/local/bin/backend
 EXPOSE 8080
 CMD ["backend"]
