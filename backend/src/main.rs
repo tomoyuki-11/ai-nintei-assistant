@@ -802,7 +802,7 @@ async fn send_password_reset_email(
 
     let creds = Credentials::new(state.smtp_username.clone(), state.smtp_password.clone());
 
-    let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay(&state.smtp_host)?
+    let mailer = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&state.smtp_host)?
         .port(state.smtp_port)
         .credentials(creds)
         .build();
