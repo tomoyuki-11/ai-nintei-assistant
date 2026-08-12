@@ -32,6 +32,8 @@ export default function HomePage() {
   const [error, setError] = useState('')
   const [openFormattedId, setOpenFormattedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [downloadConfirmId, setDownloadConfirmId] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [splash, setSplash] = useState<'visible' | 'fading' | 'hidden'>('visible')
   const [headerHeight, setHeaderHeight] = useState(61)
 
@@ -86,6 +88,39 @@ export default function HomePage() {
       setTimeout(() => setSplash('hidden'), 350)
     })
   }, [router])
+
+  async function handleDownloadAudio(item: Transcription) {
+    setDownloadConfirmId(null)
+    setDownloadingId(item.id)
+    const attempt = async () => {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${item.id}/audio`, {
+        headers: authHeaders(),
+      })
+      if (!res.ok) throw new Error('not_found')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const ext = item.audio_path?.split('.').pop() ?? 'webm'
+      a.href = url
+      a.download = `録音_${formatDate(item.created_at)}.${ext}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }
+    try {
+      await attempt()
+    } catch {
+      await new Promise((r) => setTimeout(r, 2000))
+      try {
+        await attempt()
+      } catch {
+        alert('音声ファイルが見つかりません。しばらく待ってから再度お試しください。')
+      }
+    } finally {
+      setDownloadingId(null)
+    }
+  }
 
   async function handleDelete(id: string) {
     try {
@@ -248,29 +283,28 @@ export default function HomePage() {
                   {/* 音声ダウンロード */}
                   {item.audio_path && (
                     <div className={`px-4 py-3${item.formatted ? ' border-t border-gray-100' : ''}`}>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${item.id}/audio`, {
-                              headers: authHeaders(),
-                            })
-                            if (!res.ok) { alert('音声ファイルが見つかりません'); return }
-                            const blob = await res.blob()
-                            const url = URL.createObjectURL(blob)
-                            const a = document.createElement('a')
-                            const ext = item.audio_path?.split('.').pop() ?? 'webm'
-                            a.href = url
-                            a.download = `録音_${formatDate(item.created_at)}.${ext}`
-                            document.body.appendChild(a)
-                            a.click()
-                            document.body.removeChild(a)
-                            URL.revokeObjectURL(url)
-                          } catch {
-                            alert('ダウンロードに失敗しました')
-                          }
-                        }}
-                        className="rounded-lg bg-gray-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-gray-700 transition-colors"
-                      >音声をダウンロード</button>
+                      {downloadConfirmId === item.id ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600">ダウンロードしますか？</span>
+                          <button
+                            onClick={() => handleDownloadAudio(item)}
+                            className="rounded px-2.5 py-1 text-xs bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+                          >はい</button>
+                          <button
+                            onClick={() => setDownloadConfirmId(null)}
+                            className="rounded px-2.5 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+                          >いいえ</button>
+                        </div>
+                      ) : downloadingId === item.id ? (
+                        <button disabled className="rounded-lg bg-gray-400 px-3 py-1.5 text-xs text-white font-medium cursor-not-allowed">
+                          ダウンロード中...
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setDownloadConfirmId(item.id)}
+                          className="rounded-lg bg-gray-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-gray-700 transition-colors"
+                        >音声をダウンロード</button>
+                      )}
                     </div>
                   )}
                 </div>
