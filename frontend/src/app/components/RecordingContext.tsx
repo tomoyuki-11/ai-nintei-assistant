@@ -509,7 +509,13 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           body: blob,
         })
         ok = res.ok
-        responseText = ok ? await res.text() : ''
+        if (ok) {
+          responseText = await res.text()
+        } else {
+          const errText = await res.text().catch(() => '')
+          console.error(`[/api/transcribe] iOS HTTP ${res.status}: ${errText}`)
+          responseText = ''
+        }
       } else {
         const formData = new FormData()
         formData.append('audio', blob, name)
@@ -519,7 +525,13 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           body: formData,
         })
         ok = res.ok
-        responseText = ok ? await res.text() : ''
+        if (ok) {
+          responseText = await res.text()
+        } else {
+          const errText = await res.text().catch(() => '')
+          console.error(`[/api/transcribe] HTTP ${res.status}: ${errText}`)
+          responseText = ''
+        }
       }
 
       if (!ok) return null

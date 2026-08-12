@@ -540,16 +540,18 @@ async fn transcribe_large_audio_inner(
     tokio::fs::write(&input_path, &audio_data).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("一時ファイル書き込み失敗: {}", e)))?;
 
-    // ffmpeg で 8 分 (480 秒) ごとのセグメントに分割
-    // -reset_timestamps 1 で各セグメントが 0 秒始まりになるよう正規化
-    let seg_pattern = temp_dir.join(format!("seg_%04d.{}", ext));
+    // 入力形式に関わらず 16kHz モノラル WAV に変換しながらセグメント分割する
+    // WAV (PCM) はコンテナ構造が単純なためセグメント境界が確実に有効になる
+    // 16kHz モノ 16bit: 720秒 × 16000Hz × 1ch × 2bytes = 23.0MB → Whisper 25MB 制限以内
+    let seg_pattern = temp_dir.join("seg_%04d.wav");
     let ffmpeg_result = tokio::process::Command::new("ffmpeg")
         .args([
             "-i", input_path.to_str().unwrap_or(""),
+            "-ar", "16000",        // 16kHz (Whisper のネイティブサンプルレート)
+            "-ac", "1",             // モノラル（音声認識には十分）
             "-f", "segment",
-            "-segment_time", "480",
-            "-c", "copy",
-            "-reset_timestamps", "1",
+            "-segment_time", "720", // 12 分ごとに分割 (≈23MB/セグメント)
+            "-y",                   // 出力ファイルを上書き許可
             seg_pattern.to_str().unwrap_or(""),
         ])
         .output()
@@ -564,16 +566,16 @@ async fn transcribe_large_audio_inner(
             ));
         }
         Ok(out) if !out.status.success() => {
-            tracing::error!("ffmpeg 分割エラー: {}", String::from_utf8_lossy(&out.stderr));
+            tracing::error!("ffmpeg 変換エラー: {}", String::from_utf8_lossy(&out.stderr));
             return Err((
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "音声ファイルの分割に失敗しました。ファイル形式をご確認ください。".to_string(),
+                "音声ファイルの変換に失敗しました。ファイル形式をご確認ください。".to_string(),
             ));
         }
         Ok(_) => {}
     }
 
-    // 生成されたセグメントファイルを名前順に収集
+    // 生成された seg_*.wav ファイルを名前順に収集
     let mut seg_files: Vec<std::path::PathBuf> = Vec::new();
     let mut read_dir = tokio::fs::read_dir(temp_dir).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -586,12 +588,12 @@ async fn transcribe_large_audio_inner(
     seg_files.sort();
 
     if seg_files.is_empty() {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, "音声ファイルの分割に失敗しました".to_string()));
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "音声セグメントの生成に失敗しました".to_string()));
     }
 
-    tracing::info!("ffmpeg 分割完了: {} セグメント", seg_files.len());
+    tracing::info!("ffmpeg WAV 変換完了: {} セグメント", seg_files.len());
 
-    // 各セグメントを Whisper に順次送信してテキストを蓄積
+    // 各 WAV セグメントを Whisper に順次送信してテキストを蓄積
     let mut texts: Vec<String> = Vec::new();
     for (i, seg_path) in seg_files.iter().enumerate() {
         let seg_data = match tokio::fs::read(seg_path).await {
@@ -605,8 +607,8 @@ async fn transcribe_large_audio_inner(
         tracing::info!("セグメント {} 送信: {} bytes", i, seg_data.len());
 
         let part = match reqwest::multipart::Part::bytes(seg_data)
-            .file_name(format!("segment.{}", ext))
-            .mime_str(whisper_mime)
+            .file_name(format!("segment_{}.wav", i))
+            .mime_str("audio/wav")
         {
             Ok(p) => p,
             Err(e) => {
