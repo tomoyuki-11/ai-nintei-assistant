@@ -3,6 +3,51 @@
 import { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react'
 import { authHeaders } from '@/lib/auth'
 
+// ── 大容量ファイル用ヘルパー（録音ロジックとは独立） ──────────────────────────
+
+/** Float32 PCM サンプル列を 16bit モノラル WAV の Blob に変換する */
+function float32ToWav(samples: Float32Array, sampleRate: number): Blob {
+  const dataLen = samples.length * 2
+  const buf = new ArrayBuffer(44 + dataLen)
+  const v = new DataView(buf)
+  const s4 = (o: number, str: string) => { for (let i = 0; i < 4; i++) v.setUint8(o + i, str.charCodeAt(i)) }
+  s4(0, 'RIFF'); v.setUint32(4, 36 + dataLen, true)
+  s4(8, 'WAVE'); s4(12, 'fmt ')
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true)
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true)
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true)
+  s4(36, 'data'); v.setUint32(40, dataLen, true)
+  let o = 44
+  for (let i = 0; i < samples.length; i++) {
+    const x = Math.max(-1, Math.min(1, samples[i]))
+    v.setInt16(o, x * (x < 0 ? 32768 : 32767), true); o += 2
+  }
+  return new Blob([buf], { type: 'audio/wav' })
+}
+
+/** WAV Blob を /api/transcribe に送り、文字起こしテキストを返す */
+async function sendWavToTranscribe(wav: Blob, filename: string): Promise<string | null> {
+  try {
+    const formData = new FormData()
+    formData.append('audio', wav, filename)
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/transcribe`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.text().catch(() => '')
+      console.error(`[sendWavToTranscribe] HTTP ${res.status}: ${err}`)
+      return null
+    }
+    const data = await res.json()
+    return data.text ?? ''
+  } catch (e) {
+    console.error('[sendWavToTranscribe]', e)
+    return null
+  }
+}
+
 type RecordingContextType = {
   isRecording: boolean
   isPaused: boolean
@@ -684,6 +729,48 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
   // 音声ファイルをアップロードして文字起こし（既存テキストに追記）
   const transcribeFile = useCallback(async (file: File | Blob): Promise<string> => {
+    // ── 大容量ファイル（24MB超）はブラウザでデコード→分割→順次送信 ──────────
+    // 1本の長時間 HTTP リクエストを避けることでプロキシタイムアウトを回避する
+    if (file.size > 24 * 1024 * 1024) {
+      setIsTranscribing(true)
+      try {
+        const arrayBuffer = await file.arrayBuffer()
+        const AudioCtxClass = window.AudioContext ?? (window as unknown as Record<string, typeof AudioContext>)['webkitAudioContext']
+        const ctx = new AudioCtxClass()
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+        ctx.close()
+
+        const sampleRate = audioBuffer.sampleRate
+        // 左チャンネルのみ使用（モノラル化）
+        const channelData = audioBuffer.getChannelData(0)
+
+        // Whisper 25MB 制限に収まるセグメントサイズ（16bit = 2 bytes/sample）
+        const MAX_SAMPLES = Math.floor((23 * 1024 * 1024) / 2)
+
+        const texts: string[] = []
+        for (let i = 0, start = 0; start < channelData.length; i++, start += MAX_SAMPLES) {
+          const chunk = channelData.slice(start, Math.min(start + MAX_SAMPLES, channelData.length))
+          const wav = float32ToWav(chunk, sampleRate)
+          const text = await sendWavToTranscribe(wav, `segment_${i}.wav`)
+          if (text !== null && text.trim()) texts.push(text.trim())
+        }
+
+        if (texts.length === 0) {
+          setRecordingError('文字起こしに失敗しました。対応形式: m4a / mp3 / mp4 / ogg / wav / flac / webm')
+          return textRef.current
+        }
+        audioUploadPromiseRef.current = uploadAudioToServer(file, file.type || 'audio/webm')
+        return appendTranscription(texts.join('\n'))
+      } catch (e) {
+        console.error('[transcribeFile large]', e)
+        setRecordingError('音声のデコードに失敗しました。別の形式でお試しください。')
+        return textRef.current
+      } finally {
+        setIsTranscribing(false)
+      }
+    }
+
+    // ── 通常サイズ（24MB以下）：既存パス ──────────────────────────────────────
     const filename = file instanceof File ? file.name : undefined
     const transcribed = await callWhisper(file, filename)
     if (transcribed === null) {
@@ -694,7 +781,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       setRecordingError('音声が検出されませんでした。音声が含まれているファイルをご確認ください。')
       return textRef.current
     }
-    // 文字起こし成功時にファイルをサーバーへアップロード
     const mimeType = file.type || 'audio/webm'
     audioUploadPromiseRef.current = uploadAudioToServer(file, mimeType)
     return appendTranscription(transcribed)
