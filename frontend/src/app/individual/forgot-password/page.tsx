@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
                 ご登録のメールアドレスにパスワードリセット用のリンクを送りました。<br />
                 メールが届かない場合は迷惑メールフォルダをご確認ください。
               </p>
-              <p className="text-xs text-gray-400">リンクの有効期限は1時間です</p>
+              <p className="text-xs text-gray-400">リンクの有効期限は30分です</p>
             </div>
           ) : (
             <>
