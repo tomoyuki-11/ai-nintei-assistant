@@ -702,3 +702,35 @@ pub async fn is_audio_path_tracked(pool: &PgPool, filename: &str) -> Result<bool
     .await?;
     Ok(row.0)
 }
+
+// ── パスワードリセットトークン ────────────────────────────────────────────────
+
+pub async fn create_password_reset_token(pool: &PgPool, user_id: Uuid) -> Result<Uuid, sqlx::Error> {
+    let row: (Uuid,) = sqlx::query_as(
+        "INSERT INTO password_reset_tokens (user_id) VALUES ($1) RETURNING token",
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0)
+}
+
+/// 有効なトークン（未使用・期限内）から user_id を返す
+pub async fn find_valid_reset_token(pool: &PgPool, token: Uuid) -> Result<Option<Uuid>, sqlx::Error> {
+    let row: Option<(Uuid,)> = sqlx::query_as(
+        "SELECT user_id FROM password_reset_tokens
+         WHERE token = $1 AND used_at IS NULL AND expires_at > NOW()",
+    )
+    .bind(token)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(id,)| id))
+}
+
+pub async fn consume_reset_token(pool: &PgPool, token: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE password_reset_tokens SET used_at = NOW() WHERE token = $1")
+        .bind(token)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

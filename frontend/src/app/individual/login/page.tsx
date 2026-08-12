@@ -92,7 +92,12 @@ export default function IndividualLoginPage() {
             </button>
           </form>
 
-          <div className="mt-5 pt-4 border-t border-gray-100 text-center">
+          <div className="mt-5 pt-4 border-t border-gray-100 space-y-3 text-center">
+            <p className="text-sm text-gray-500">
+              <Link href="/individual/forgot-password" className="text-gray-500 hover:underline">
+                パスワードを忘れた方はこちら
+              </Link>
+            </p>
             <p className="text-sm text-gray-500">
               アカウントをお持ちでない方は{' '}
               <Link href="/individual/register" className="text-blue-600 hover:underline font-medium">

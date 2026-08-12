@@ -5,6 +5,11 @@ use axum::{
     Json, Router,
 };
 use chrono::{DateTime, Duration, Utc};
+use lettre::{
+    message::header::ContentType,
+    transport::smtp::authentication::Credentials,
+    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
@@ -33,6 +38,12 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     pub openai_api_key: String,
     pub audio_storage_path: String,
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_username: String,
+    pub smtp_password: String,
+    pub from_email: String,
+    pub app_url: String,
 }
 
 // ─── Request / Response types ─────────────────────────────────────────────────
@@ -180,6 +191,17 @@ struct CheckoutSessionResponse {
     url: String,
 }
 
+#[derive(Deserialize)]
+struct ForgotPasswordRequest {
+    email: String,
+}
+
+#[derive(Deserialize)]
+struct ResetPasswordRequest {
+    token: String,
+    new_password: String,
+}
+
 #[derive(Serialize)]
 struct PlanStatusResponse {
     plan: String,
@@ -224,6 +246,16 @@ async fn main() {
         .unwrap_or_else(|_| "./audio_storage".to_string());
     std::fs::create_dir_all(&audio_storage_path)
         .expect("Failed to create audio storage directory");
+    let smtp_host = std::env::var("SMTP_HOST").unwrap_or_default();
+    let smtp_port = std::env::var("SMTP_PORT")
+        .ok()
+        .and_then(|v| v.parse::<u16>().ok())
+        .unwrap_or(587);
+    let smtp_username = std::env::var("SMTP_USERNAME").unwrap_or_default();
+    let smtp_password = std::env::var("SMTP_PASSWORD").unwrap_or_default();
+    let from_email = std::env::var("FROM_EMAIL").unwrap_or_default();
+    let app_url = std::env::var("APP_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     tracing::info!("DATABASE_URL: {}", database_url);
     tracing::info!("ANTHROPIC_API_KEY: set");
@@ -313,6 +345,12 @@ async fn main() {
             .expect("reqwest Client 初期化失敗"),
         openai_api_key,
         audio_storage_path,
+        smtp_host,
+        smtp_port,
+        smtp_username,
+        smtp_password,
+        from_email,
+        app_url,
     };
 
     let frontend_url = std::env::var("FRONTEND_URL")
@@ -345,6 +383,8 @@ async fn main() {
         .route("/api/individual/register", post(individual_register_handler))
         .route("/api/individual/login", post(individual_login_handler))
         .route("/api/individual/complete-onboarding", post(complete_onboarding_handler))
+        .route("/api/auth/forgot-password", post(forgot_password_handler))
+        .route("/api/auth/reset-password", post(reset_password_handler))
         // 施設ユーザー
         .route("/api/auth/signup", post(signup_handler))
         .route("/api/auth/login", post(login_handler))
@@ -681,6 +721,94 @@ async fn transcribe_large_audio_inner(
     }
 
     Ok(texts.join("\n"))
+}
+
+// ─── パスワードリセット ────────────────────────────────────────────────────────
+
+async fn forgot_password_handler(
+    State(state): State<AppState>,
+    Json(body): Json<ForgotPasswordRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // メールが存在するかに関わらず常に 200 を返す（ユーザー列挙攻撃の防止）
+    let user = db::find_individual_user_by_email(&state.db, &body.email)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if let Some(user) = user {
+        let token = db::create_password_reset_token(&state.db, user.id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        let reset_link = format!("{}/individual/reset-password?token={}", state.app_url, token);
+
+        if let Err(e) = send_password_reset_email(&state, &body.email, &reset_link).await {
+            tracing::error!("パスワードリセットメール送信失敗: {}", e);
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "メールの送信に失敗しました".to_string()));
+        }
+        tracing::info!("パスワードリセットメール送信: {}", body.email);
+    }
+
+    Ok(Json(serde_json::json!({ "message": "メールを送信しました" })))
+}
+
+async fn reset_password_handler(
+    State(state): State<AppState>,
+    Json(body): Json<ResetPasswordRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if body.new_password.len() < 8 {
+        return Err((StatusCode::BAD_REQUEST, "パスワードは8文字以上で設定してください".to_string()));
+    }
+
+    let token = body.token.parse::<Uuid>()
+        .map_err(|_| (StatusCode::BAD_REQUEST, "無効なトークンです".to_string()))?;
+
+    let user_id = db::find_valid_reset_token(&state.db, token)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "リンクが無効または期限切れです。再度パスワードリセットを申請してください。".to_string()))?;
+
+    let new_hash = hash_password(&body.new_password).await?;
+    db::update_user_password(&state.db, user_id, &new_hash)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    db::consume_reset_token(&state.db, token)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({ "message": "パスワードを変更しました" })))
+}
+
+async fn send_password_reset_email(
+    state: &AppState,
+    to: &str,
+    reset_link: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let body = format!(
+        "パスワードリセットのご案内\n\n\
+         下記のリンクからパスワードを再設定してください。\n\
+         リンクの有効期限は1時間です。\n\n\
+         {}\n\n\
+         このメールに心当たりがない場合は無視してください。\n\
+         ご自身でお申し込みされた場合、このメールを安全に破棄してください。",
+        reset_link
+    );
+
+    let email = Message::builder()
+        .from(state.from_email.parse()?)
+        .to(to.parse()?)
+        .subject("【AI認定調査アシスタント】パスワードリセット")
+        .header(ContentType::TEXT_PLAIN)
+        .body(body)?;
+
+    let creds = Credentials::new(state.smtp_username.clone(), state.smtp_password.clone());
+
+    let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay(&state.smtp_host)?
+        .port(state.smtp_port)
+        .credentials(creds)
+        .build();
+
+    mailer.send(email).await?;
+    Ok(())
 }
 
 // ─── ヘルス ───────────────────────────────────────────────────────────────────

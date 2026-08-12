@@ -25,6 +25,12 @@ services:
       - STRIPE_INDIVIDUAL_CREDIT_PRICE_ID=${STRIPE_INDIVIDUAL_CREDIT_PRICE_ID}
       - FRONTEND_URL=${FRONTEND_URL}
       - AUDIO_STORAGE_PATH=/audio_storage
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - APP_URL=${APP_URL}
     depends_on:
       db:
         condition: service_healthy
