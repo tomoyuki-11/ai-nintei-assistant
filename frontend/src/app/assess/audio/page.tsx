@@ -71,7 +71,7 @@ async function clearUploadFile(): Promise<void> {
 
 export default function AudioPage() {
   const router = useRouter()
-  const { isTranscribing, setText, transcribeFile, recordingError, setRecordingError, getAudioUploadPromise } = useRecording()
+  const { isTranscribing, setText, transcribeFile, recordingError, setRecordingError } = useRecording()
 
   const [file, setFile] = useState<File | null>(null)
   const [isFormatting, setIsFormatting] = useState(false)
@@ -137,11 +137,10 @@ export default function AudioPage() {
       setText('')
       // 保存・課金（クライアントが結果を受け取った後に実行）
       // 音声アップロード完了を待ってから保存（transcribeFile内でアップロード開始済み）
-      const audioPath = await getAudioUploadPromise()
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ text: transcribedText, formatted: data.formatted, save_text: false, ...(audioPath ? { audio_path: audioPath } : {}) }),
+        body: JSON.stringify({ text: transcribedText, formatted: data.formatted, save_text: false }),
       }).catch(() => {})
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
