@@ -41,6 +41,7 @@ const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
   const [isPageHidden, setIsPageHidden] = useState(false)
   const [isOnline, setIsOnline] = useState(() => typeof window !== 'undefined' ? navigator.onLine : true)
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'failed'>('idle')
+  const [showDiscardModal, setShowDiscardModal] = useState(false)
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
@@ -374,6 +375,30 @@ useEffect(() => {
       {/* 使用回数上限モーダル */}
       <PlanLimitModal limitPlan={limitPlan} onClose={() => setLimitPlan(null)} />
 
+      {/* 破棄確認モーダル */}
+      {showDiscardModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
+            <p className="text-sm font-semibold text-gray-900 mb-2">録音データを破棄しますか？</p>
+            <p className="text-xs text-gray-500 mb-5">破棄すると録音音声が削除されます。この操作は元に戻せません。</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDiscardModal(false)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => { setShowDiscardModal(false); clearRecording(); setUploadState('idle') }}
+                className="flex-1 rounded-lg bg-red-500 px-4 py-2 text-sm text-white font-medium hover:bg-red-600 transition-colors"
+              >
+                破棄する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* iOS 自動ロック確認モーダル */}
       {showAutoLockModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -566,7 +591,7 @@ useEffect(() => {
                       }} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
                         音声をダウンロード (.{getExtFromMime(downloadableAudio.type)}) [{(downloadableAudio.size / 1024 / 1024).toFixed(1)}MB]
                       </button>
-                      <button onClick={() => { clearRecording(); setUploadState('idle') }} className="ml-auto text-xs text-gray-400 hover:text-red-500 transition-colors">
+                      <button onClick={() => setShowDiscardModal(true)} className="ml-auto text-xs text-gray-400 hover:text-red-500 transition-colors">
                         破棄
                       </button>
                     </div>
