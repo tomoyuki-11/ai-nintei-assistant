@@ -165,7 +165,7 @@ export default function TextPage() {
                     <span className="inline-block w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                     AI整形中...
                   </span>
-                ) : 'AI整形を実行'}
+                ) : '整形する'}
               </button>
               {isFormatting && (
                 <button

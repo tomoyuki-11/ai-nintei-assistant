@@ -282,7 +282,7 @@ export default function AudioPage() {
                   disabled={!file}
                   className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  AI整形を実行
+                  文字起こし・整形する
                 </button>
               </>
             )}
