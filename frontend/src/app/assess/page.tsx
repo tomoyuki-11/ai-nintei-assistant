@@ -64,7 +64,7 @@ export default function AssessPage() {
                 )}
               </div>
               <p className={`text-xs mt-0.5 ${hasRecordingData ? 'text-orange-600' : 'text-gray-500'}`}>
-                {hasRecordingData ? '保存された録音データがあります。タップして続きを確認できます。' : 'その場で録音して自動で文字起こし・整形を行います'}
+                {hasRecordingData ? '保存された録音データがあります。タップして続きを確認できます。' : 'AIで文字起こし・整形します'}
               </p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" className={`ml-auto sm:hidden shrink-0 w-5 h-5 ${hasRecordingData ? 'text-orange-400' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -84,7 +84,7 @@ export default function AssessPage() {
             </div>
             <div className="min-w-0 flex-1 sm:flex-none">
               <p className="text-sm font-semibold text-gray-900">テキストを貼り付けて整形</p>
-              <p className="text-xs text-gray-500 mt-0.5">テキストを貼り付けてAIが認定調査票形式に整形します</p>
+              <p className="text-xs text-gray-500 mt-0.5">AIが認定調査票形式に整形します</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" className="ml-auto sm:hidden shrink-0 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -103,7 +103,7 @@ export default function AssessPage() {
             </div>
             <div className="min-w-0 flex-1 sm:flex-none">
               <p className="text-sm font-semibold text-gray-900">音声ファイルを整形</p>
-              <p className="text-xs text-gray-500 mt-0.5">録音済みの音声ファイルをアップロードして整形します</p>
+              <p className="text-xs text-gray-500 mt-0.5">AIで文字起こし・整形します</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" className="ml-auto sm:hidden shrink-0 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
