@@ -486,11 +486,12 @@ export default function SuperAdminPage() {
             {individualLoading ? (
               <p className="text-sm text-gray-400">読み込み中...</p>
             ) : (
-              <div className="border border-gray-300 bg-white shadow-sm overflow-hidden">
+              <div className="border border-gray-300 bg-white shadow-sm">
                 {individualUsers.length === 0 ? (
                   <p className="text-sm text-gray-400 px-5 py-6">個人ユーザーはいません</p>
                 ) : (
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[1100px]">
                     <thead>
                       <tr className="border-b-2 border-gray-400 bg-gray-200 text-xs text-gray-700">
                         <th className="text-left px-4 py-2 font-bold border-r border-gray-300">メールアドレス</th>
@@ -617,6 +618,7 @@ export default function SuperAdminPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
             )}
