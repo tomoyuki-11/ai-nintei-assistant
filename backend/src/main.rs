@@ -729,24 +729,25 @@ async fn forgot_password_handler(
     State(state): State<AppState>,
     Json(body): Json<ForgotPasswordRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    // メールが存在するかに関わらず常に 200 を返す（ユーザー列挙攻撃の防止）
     let user = db::find_individual_user_by_email(&state.db, &body.email)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if let Some(user) = user {
-        let token = db::create_password_reset_token(&state.db, user.id)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let user = user.ok_or_else(|| {
+        (StatusCode::NOT_FOUND, "このメールアドレスは登録されていません".to_string())
+    })?;
 
-        let reset_link = format!("{}/individual/reset-password?token={}", state.app_url, token);
+    let token = db::create_password_reset_token(&state.db, user.id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        if let Err(e) = send_password_reset_email(&state, &body.email, &reset_link).await {
-            tracing::error!("パスワードリセットメール送信失敗: {}", e);
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, "メールの送信に失敗しました".to_string()));
-        }
-        tracing::info!("パスワードリセットメール送信: {}", body.email);
+    let reset_link = format!("{}/individual/reset-password?token={}", state.app_url, token);
+
+    if let Err(e) = send_password_reset_email(&state, &body.email, &reset_link).await {
+        tracing::error!("パスワードリセットメール送信失敗: {}", e);
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "メールの送信に失敗しました".to_string()));
     }
+    tracing::info!("パスワードリセットメール送信: {}", body.email);
 
     Ok(Json(serde_json::json!({ "message": "メールを送信しました" })))
 }
