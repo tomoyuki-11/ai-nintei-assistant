@@ -704,7 +704,7 @@ async fn transcribe_by_path_handler(
         let mut jobs = state_bg.transcribe_jobs.write().await;
         match result {
             Ok(text) => {
-                tracing::info!("文字起こし完了 (job: {})", job_id_bg);
+                tracing::info!("文字起こし完了 (job: {}): {} 文字", job_id_bg, text.chars().count());
                 jobs.insert(job_id_bg, TranscribeJobState::Done(text));
             }
             Err(msg) => {
