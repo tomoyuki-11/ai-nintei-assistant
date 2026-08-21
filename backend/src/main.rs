@@ -410,7 +410,7 @@ async fn main() {
         .route("/api/transcription", post(save_transcription_handler))
         .route("/api/transcribe", post(transcribe_handler))
         .route("/api/transcribe-by-path", post(transcribe_by_path_handler))
-        .route("/api/transcribe-job/:job_id", get(transcribe_job_handler))
+        .route("/api/transcribe-job/{job_id}", get(transcribe_job_handler))
         .route("/api/audio-upload", post(audio_upload_handler))
         .route("/api/audio-upload/chunk", post(audio_upload_chunk_handler))
         .route("/api/format", post(format_handler))
