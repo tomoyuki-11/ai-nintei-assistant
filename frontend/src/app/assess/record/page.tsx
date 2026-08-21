@@ -19,7 +19,7 @@ export default function RecordPage() {
     pendingAudio, downloadableAudio, hasPendingRecovery,
     startRecording, stopRecording, pauseRecording, resumeRecording,
     transcribeRecording, retryTranscription, recoverAndTranscribe, discardRecovery,
-    transcribeFile, downloadAudio, clearPendingAudio, clearRecording,
+    transcribeFile, transcribeByPath, downloadAudio, clearPendingAudio, clearRecording,
     getAudioUploadPromise, retryAudioUpload,
   } = useRecording()
 
@@ -251,7 +251,10 @@ useEffect(() => {
   }
 
   async function handleTranscribeAndFormat() {
-    const currentText = await transcribeRecording()
+    const audioPath = await getAudioUploadPromise()
+    const currentText = audioPath
+      ? await transcribeByPath(audioPath)
+      : await transcribeRecording()
     if (!currentText.trim()) return
     localStorage.setItem('pipeline_pending', '1')
     localStorage.setItem('pipeline_text', currentText)

@@ -401,6 +401,7 @@ async fn main() {
         .route("/api/save-result", post(save_result_handler))
         .route("/api/transcription", post(save_transcription_handler))
         .route("/api/transcribe", post(transcribe_handler))
+        .route("/api/transcribe-by-path", post(transcribe_by_path_handler))
         .route("/api/audio-upload", post(audio_upload_handler))
         .route("/api/audio-upload/chunk", post(audio_upload_chunk_handler))
         .route("/api/format", post(format_handler))
@@ -433,6 +434,93 @@ async fn mark_downloaded_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ─── 音声フォーマット判定ユーティリティ ───────────────────────────────────────
+
+/// Content-Type の MIME タイプから保存用の拡張子を判定する
+fn mime_to_ext(mime_type: &str) -> &'static str {
+    if mime_type.contains("ogg") { "ogg" }
+    else if mime_type.contains("flac") { "flac" }
+    else if mime_type.contains("m4a") { "m4a" }
+    else if mime_type.contains("mp4") { "mp4" }
+    else if mime_type.contains("mpeg") || mime_type.contains("mp3") { "mp3" }
+    else if mime_type.contains("wav") { "wav" }
+    else { "webm" }
+}
+
+/// 拡張子から Whisper API に送信する MIME タイプを判定する
+fn ext_to_whisper_mime(ext: &str) -> &'static str {
+    match ext {
+        "ogg" => "audio/ogg",
+        "flac" => "audio/flac",
+        "m4a" | "mp4" => "audio/mp4",
+        "mp3" | "mpeg" | "mpga" => "audio/mpeg",
+        "wav" => "audio/wav",
+        _ => "audio/webm",
+    }
+}
+
+/// チャンク分割アップロードのインデックスが有効かを検証する
+fn validate_chunk_index(chunk_index: usize, total_chunks: usize) -> Result<(), &'static str> {
+    if total_chunks == 0 || chunk_index >= total_chunks {
+        Err("チャンクインデックスが不正です")
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod audio_format_tests {
+    use super::*;
+
+    #[test]
+    fn mime_to_ext_ok_known_types() {
+        assert_eq!(mime_to_ext("audio/wav"), "wav");
+        assert_eq!(mime_to_ext("audio/ogg;codecs=opus"), "ogg");
+        assert_eq!(mime_to_ext("audio/flac"), "flac");
+        assert_eq!(mime_to_ext("audio/m4a"), "m4a");
+        assert_eq!(mime_to_ext("audio/mp4"), "mp4");
+        assert_eq!(mime_to_ext("audio/mpeg"), "mp3");
+        assert_eq!(mime_to_ext("audio/mp3"), "mp3");
+    }
+
+    #[test]
+    fn mime_to_ext_ng_unknown_falls_back_to_webm() {
+        // 未知・空の MIME タイプは webm にフォールバックする
+        assert_eq!(mime_to_ext("application/unknown"), "webm");
+        assert_eq!(mime_to_ext(""), "webm");
+        assert_eq!(mime_to_ext("video/mp2t"), "webm");
+    }
+
+    #[test]
+    fn ext_to_whisper_mime_ok_known_exts() {
+        assert_eq!(ext_to_whisper_mime("wav"), "audio/wav");
+        assert_eq!(ext_to_whisper_mime("m4a"), "audio/mp4");
+        assert_eq!(ext_to_whisper_mime("mp4"), "audio/mp4");
+        assert_eq!(ext_to_whisper_mime("mp3"), "audio/mpeg");
+    }
+
+    #[test]
+    fn ext_to_whisper_mime_ng_unknown_falls_back_to_webm() {
+        assert_eq!(ext_to_whisper_mime("xyz"), "audio/webm");
+        assert_eq!(ext_to_whisper_mime(""), "audio/webm");
+    }
+
+    #[test]
+    fn validate_chunk_index_ok_within_range() {
+        assert!(validate_chunk_index(0, 3).is_ok());
+        assert!(validate_chunk_index(2, 3).is_ok());
+    }
+
+    #[test]
+    fn validate_chunk_index_ng_out_of_range_or_zero_total() {
+        // 総チャンク数と同じ、または超えるインデックスは不正
+        assert!(validate_chunk_index(3, 3).is_err());
+        assert!(validate_chunk_index(5, 3).is_err());
+        // 総チャンク数が 0 は常に不正
+        assert!(validate_chunk_index(0, 0).is_err());
+    }
 }
 
 // ─── Whisper 文字起こし ───────────────────────────────────────────────────────
@@ -484,23 +572,10 @@ async fn transcribe_handler(
 
     tracing::info!("音声データ: {} bytes, mime: {}", audio_data.len(), mime_type);
 
-    let ext = if mime_type.contains("ogg") { "ogg" }
-              else if mime_type.contains("flac") { "flac" }
-              else if mime_type.contains("m4a") { "m4a" }
-              else if mime_type.contains("mp4") { "mp4" }
-              else if mime_type.contains("mpeg") || mime_type.contains("mp3") { "mp3" }
-              else if mime_type.contains("wav") { "wav" }
-              else { "webm" };
+    let ext = mime_to_ext(&mime_type);
     let filename = format!("audio.{}", ext);
 
-    let whisper_mime = match ext {
-        "ogg" => "audio/ogg",
-        "flac" => "audio/flac",
-        "m4a" | "mp4" => "audio/mp4",
-        "mp3" | "mpeg" | "mpga" => "audio/mpeg",
-        "wav" => "audio/wav",
-        _ => "audio/webm",
-    };
+    let whisper_mime = ext_to_whisper_mime(ext);
 
     tracing::info!("Whisper送信: filename={}, whisper_mime={}", filename, whisper_mime);
 
@@ -541,6 +616,74 @@ async fn transcribe_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     tracing::info!("Whisper 成功");
+    Ok(Json(serde_json::json!({ "text": data["text"] })))
+}
+
+// ─── サーバー保存済み音声ファイルをパス指定で文字起こし ──────────────────────────
+
+#[derive(serde::Deserialize)]
+struct TranscribeByPathRequest {
+    audio_path: String,
+}
+
+async fn transcribe_by_path_handler(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Json(body): Json<TranscribeByPathRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // パストラバーサル防止
+    if body.audio_path.contains('/') || body.audio_path.contains('\\') || body.audio_path.contains("..") {
+        return Err((StatusCode::BAD_REQUEST, "不正なファイルパスです".to_string()));
+    }
+
+    let file_path = format!("{}/{}", state.audio_storage_path, body.audio_path);
+    let audio_data = tokio::fs::read(&file_path).await
+        .map_err(|e| {
+            tracing::error!("音声ファイル読み込み失敗: {}: {}", file_path, e);
+            (StatusCode::NOT_FOUND, "音声ファイルが見つかりません".to_string())
+        })?;
+
+    tracing::info!("/api/transcribe-by-path: {} bytes ({})", audio_data.len(), body.audio_path);
+
+    let ext = body.audio_path.rsplit('.').next().unwrap_or("mp4");
+    let whisper_mime = ext_to_whisper_mime(ext);
+
+    const WHISPER_MAX_BYTES: usize = 24 * 1024 * 1024;
+    if audio_data.len() > WHISPER_MAX_BYTES {
+        tracing::info!("大容量ファイル ({} bytes): ffmpeg 分割処理を開始", audio_data.len());
+        let text = transcribe_large_audio(&state.http_client, &state.openai_api_key, audio_data, ext, whisper_mime).await?;
+        return Ok(Json(serde_json::json!({ "text": text })));
+    }
+
+    let part = reqwest::multipart::Part::bytes(audio_data)
+        .file_name(body.audio_path.clone())
+        .mime_str(whisper_mime)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let form = reqwest::multipart::Form::new()
+        .part("file", part)
+        .text("model", "whisper-1")
+        .text("language", "ja");
+
+    let response = state.http_client
+        .post("https://api.openai.com/v1/audio/transcriptions")
+        .header("Authorization", format!("Bearer {}", state.openai_api_key))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        tracing::error!("Whisper API error {}: {}", status, body);
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "文字起こしに失敗しました".to_string()));
+    }
+
+    let data: serde_json::Value = response.json().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tracing::info!("Whisper 成功 (by path: {})", body.audio_path);
     Ok(Json(serde_json::json!({ "text": data["text"] })))
 }
 
@@ -1566,13 +1709,7 @@ async fn audio_upload_handler(
         .to_string();
 
     let mime = content_type.split(';').next().unwrap_or("audio/webm").trim().to_string();
-    let ext = if mime.contains("ogg") { "ogg" }
-              else if mime.contains("flac") { "flac" }
-              else if mime.contains("m4a") { "m4a" }
-              else if mime.contains("mp4") { "mp4" }
-              else if mime.contains("mpeg") || mime.contains("mp3") { "mp3" }
-              else if mime.contains("wav") { "wav" }
-              else { "webm" };
+    let ext = mime_to_ext(&mime);
 
     let audio_data = axum::body::to_bytes(req.into_body(), 200 * 1024 * 1024)
         .await
@@ -1624,9 +1761,8 @@ async fn audio_upload_chunk_handler(
         .and_then(|v| v.parse().ok())
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "X-Total-Chunks が必要です".to_string()))?;
 
-    if total_chunks == 0 || chunk_index >= total_chunks {
-        return Err((StatusCode::BAD_REQUEST, "チャンクインデックスが不正です".to_string()));
-    }
+    validate_chunk_index(chunk_index, total_chunks)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let content_type = headers
         .get("content-type")
@@ -1635,13 +1771,7 @@ async fn audio_upload_chunk_handler(
         .to_string();
 
     let mime = content_type.split(';').next().unwrap_or("audio/webm").trim().to_string();
-    let ext = if mime.contains("ogg") { "ogg" }
-              else if mime.contains("flac") { "flac" }
-              else if mime.contains("m4a") { "m4a" }
-              else if mime.contains("mp4") { "mp4" }
-              else if mime.contains("mpeg") || mime.contains("mp3") { "mp3" }
-              else if mime.contains("wav") { "wav" }
-              else { "webm" };
+    let ext = mime_to_ext(&mime);
 
     // チャンクは 1 枚 10MB まで
     let chunk_data = axum::body::to_bytes(req.into_body(), 10 * 1024 * 1024)

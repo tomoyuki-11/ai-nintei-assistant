@@ -73,6 +73,7 @@ type RecordingContextType = {
   downloadAudio: () => Promise<void>
   clearPendingAudio: () => void
   clearRecording: () => void
+  transcribeByPath: (audioPath: string) => Promise<string>
   getAudioUploadPromise: () => Promise<string | null>
   retryAudioUpload: () => Promise<boolean>
 }
@@ -963,6 +964,35 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return false
   }, [downloadableAudio, uploadAudioToServer])
 
+  const transcribeByPath = useCallback(async (audioPath: string): Promise<string> => {
+    setIsTranscribing(true)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/transcribe-by-path`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ audio_path: audioPath }),
+      })
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        console.error(`[/api/transcribe-by-path] HTTP ${res.status}: ${errText}`)
+        setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
+        return textRef.current
+      }
+      const data = await res.json()
+      const transcribed: string = data.text || ''
+      if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
+        setRecordingError('音声が検出されませんでした。')
+        return textRef.current
+      }
+      return appendTranscription(transcribed)
+    } catch {
+      setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
+      return textRef.current
+    } finally {
+      setIsTranscribing(false)
+    }
+  }, [appendTranscription])
+
   const clearRecording = useCallback(() => {
     setText('')
     localStorage.removeItem(DRAFT_KEY)
@@ -999,6 +1029,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       downloadAudio,
       clearPendingAudio,
       clearRecording,
+      transcribeByPath,
       getAudioUploadPromise: () => audioUploadPromiseRef.current,
       retryAudioUpload,
     }}>
