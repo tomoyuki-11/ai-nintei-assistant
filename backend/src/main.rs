@@ -23,10 +23,17 @@ mod db;
 use auth::{create_token, AuthSuperAdmin, AuthUser};
 use claude::ClaudeClient;
 
+pub enum TranscribeJobState {
+    Processing,
+    Done(String),
+    Failed(String),
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub claude: ClaudeClient,
     pub db: PgPool,
+    pub transcribe_jobs: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, TranscribeJobState>>>,
     pub jwt_secret: String,
     pub admin_tool_password: String,
     pub stripe_secret_key: String,
@@ -331,6 +338,7 @@ async fn main() {
     let state = AppState {
         claude: ClaudeClient::new(anthropic_api_key),
         db: pool,
+        transcribe_jobs: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
         jwt_secret,
         admin_tool_password,
         stripe_secret_key,
@@ -402,6 +410,7 @@ async fn main() {
         .route("/api/transcription", post(save_transcription_handler))
         .route("/api/transcribe", post(transcribe_handler))
         .route("/api/transcribe-by-path", post(transcribe_by_path_handler))
+        .route("/api/transcribe-job/:job_id", get(transcribe_job_handler))
         .route("/api/audio-upload", post(audio_upload_handler))
         .route("/api/audio-upload/chunk", post(audio_upload_chunk_handler))
         .route("/api/format", post(format_handler))
@@ -645,46 +654,89 @@ async fn transcribe_by_path_handler(
 
     tracing::info!("/api/transcribe-by-path: {} bytes ({})", audio_data.len(), body.audio_path);
 
-    let ext = body.audio_path.rsplit('.').next().unwrap_or("mp4");
-    let whisper_mime = ext_to_whisper_mime(ext);
+    let ext = body.audio_path.rsplit('.').next().unwrap_or("mp4").to_string();
+    let job_id = uuid::Uuid::new_v4().to_string();
 
-    const WHISPER_MAX_BYTES: usize = 24 * 1024 * 1024;
-    if audio_data.len() > WHISPER_MAX_BYTES {
-        tracing::info!("大容量ファイル ({} bytes): ffmpeg 分割処理を開始", audio_data.len());
-        let text = transcribe_large_audio(&state.http_client, &state.openai_api_key, audio_data, ext, whisper_mime).await?;
-        return Ok(Json(serde_json::json!({ "text": text })));
+    // ジョブを Processing として登録
+    {
+        let mut jobs = state.transcribe_jobs.write().await;
+        jobs.insert(job_id.clone(), TranscribeJobState::Processing);
     }
 
-    let part = reqwest::multipart::Part::bytes(audio_data)
-        .file_name(body.audio_path.clone())
-        .mime_str(whisper_mime)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // バックグラウンドで文字起こし処理を実行（iOSタイムアウト回避）
+    let state_bg = state.clone();
+    let job_id_bg = job_id.clone();
+    tokio::spawn(async move {
+        let whisper_mime = ext_to_whisper_mime(&ext).to_string();
+        const WHISPER_MAX_BYTES: usize = 24 * 1024 * 1024;
 
-    let form = reqwest::multipart::Form::new()
-        .part("file", part)
-        .text("model", "whisper-1")
-        .text("language", "ja");
+        let result: Result<String, String> = async {
+            if audio_data.len() > WHISPER_MAX_BYTES {
+                tracing::info!("大容量ファイル ({} bytes): ffmpeg 分割処理を開始", audio_data.len());
+                transcribe_large_audio(&state_bg.http_client, &state_bg.openai_api_key, audio_data, &ext, &whisper_mime)
+                    .await
+                    .map_err(|(_, msg)| msg)
+            } else {
+                let part = reqwest::multipart::Part::bytes(audio_data)
+                    .file_name(format!("audio.{}", ext))
+                    .mime_str(&whisper_mime)
+                    .map_err(|e| e.to_string())?;
+                let form = reqwest::multipart::Form::new()
+                    .part("file", part)
+                    .text("model", "whisper-1")
+                    .text("language", "ja");
+                let resp = state_bg.http_client
+                    .post("https://api.openai.com/v1/audio/transcriptions")
+                    .header("Authorization", format!("Bearer {}", state_bg.openai_api_key))
+                    .multipart(form)
+                    .send()
+                    .await
+                    .map_err(|e| e.to_string())?;
+                if !resp.status().is_success() {
+                    let err = resp.text().await.unwrap_or_default();
+                    return Err(format!("Whisper error: {}", err));
+                }
+                let data: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+                Ok(data["text"].as_str().unwrap_or("").to_string())
+            }
+        }.await;
 
-    let response = state.http_client
-        .post("https://api.openai.com/v1/audio/transcriptions")
-        .header("Authorization", format!("Bearer {}", state.openai_api_key))
-        .multipart(form)
-        .send()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let mut jobs = state_bg.transcribe_jobs.write().await;
+        match result {
+            Ok(text) => {
+                tracing::info!("文字起こし完了 (job: {})", job_id_bg);
+                jobs.insert(job_id_bg, TranscribeJobState::Done(text));
+            }
+            Err(msg) => {
+                tracing::error!("文字起こし失敗 (job: {}): {}", job_id_bg, msg);
+                jobs.insert(job_id_bg, TranscribeJobState::Failed(msg));
+            }
+        }
+    });
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        tracing::error!("Whisper API error {}: {}", status, body);
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, "文字起こしに失敗しました".to_string()));
+    Ok(Json(serde_json::json!({ "job_id": job_id })))
+}
+
+async fn transcribe_job_handler(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    axum::extract::Path(job_id): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let jobs = state.transcribe_jobs.read().await;
+    match jobs.get(&job_id) {
+        Some(TranscribeJobState::Processing) => {
+            Ok(Json(serde_json::json!({ "status": "processing" })))
+        }
+        Some(TranscribeJobState::Done(text)) => {
+            Ok(Json(serde_json::json!({ "status": "done", "text": text })))
+        }
+        Some(TranscribeJobState::Failed(msg)) => {
+            Ok(Json(serde_json::json!({ "status": "failed", "error": msg })))
+        }
+        None => {
+            Err((StatusCode::NOT_FOUND, "ジョブが見つかりません".to_string()))
+        }
     }
-
-    let data: serde_json::Value = response.json().await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    tracing::info!("Whisper 成功 (by path: {})", body.audio_path);
-    Ok(Json(serde_json::json!({ "text": data["text"] })))
 }
 
 // ─── 大容量音声ファイルの分割文字起こし ──────────────────────────────────────────

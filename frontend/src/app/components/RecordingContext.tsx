@@ -967,24 +967,48 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const transcribeByPath = useCallback(async (audioPath: string): Promise<string> => {
     setIsTranscribing(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/transcribe-by-path`, {
+      // ジョブを開始（即時レスポンス）
+      const startRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/transcribe-by-path`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ audio_path: audioPath }),
       })
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '')
-        console.error(`[/api/transcribe-by-path] HTTP ${res.status}: ${errText}`)
+      if (!startRes.ok) {
+        const errText = await startRes.text().catch(() => '')
+        console.error(`[/api/transcribe-by-path] HTTP ${startRes.status}: ${errText}`)
         setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
         return textRef.current
       }
-      const data = await res.json()
-      const transcribed: string = data.text || ''
-      if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
-        setRecordingError('音声が検出されませんでした。')
-        return textRef.current
+      const { job_id } = await startRes.json()
+
+      // 3秒ごとにジョブ状態をポーリング（iOS Safariタイムアウト回避）
+      while (true) {
+        await new Promise(r => setTimeout(r, 3000))
+        const pollRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe-job/${job_id}`,
+          { headers: authHeaders() }
+        )
+        if (!pollRes.ok) {
+          console.error(`[/api/transcribe-job] HTTP ${pollRes.status}`)
+          setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
+          return textRef.current
+        }
+        const data = await pollRes.json()
+        if (data.status === 'done') {
+          const transcribed: string = data.text || ''
+          if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
+            setRecordingError('音声が検出されませんでした。')
+            return textRef.current
+          }
+          return appendTranscription(transcribed)
+        }
+        if (data.status === 'failed') {
+          console.error(`[/api/transcribe-job] failed: ${data.error}`)
+          setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
+          return textRef.current
+        }
+        // status === 'processing' → 次のポーリングへ
       }
-      return appendTranscription(transcribed)
     } catch {
       setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
       return textRef.current
