@@ -502,6 +502,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   function isHallucination(text: string): boolean {
     const t = text.trim()
     if (t.length === 0) return true
+    // 100文字超の場合は実音声があると判断してスキップ
+    if (t.length > 100) return false
     return HALLUCINATIONS.some((h) => t.includes(h))
   }
 
