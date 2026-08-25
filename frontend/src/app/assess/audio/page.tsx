@@ -166,7 +166,7 @@ export default function AudioPage() {
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ text: transcribedText, formatted: data.formatted, audio_path: audioPath, save_text: false }),
+        body: JSON.stringify({ text: transcribedText, formatted: data.formatted, save_text: false }),
       }).catch(() => {})
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
