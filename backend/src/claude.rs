@@ -7,6 +7,7 @@ const SYSTEM_PROMPT: &str = r#"あなたは介護保険の認定調査員支援A
 例：1-1→101、2-5→205、4-15→415、5-6→506、6-1→601
 出力ルール（厳守）
 出力は箇条書き（1行＝1項目）
+番号+半角スペース+項目名+全角スペース+判定。+全角スペース+特記：〇〇
 形式は次のどちらかに統一する
 情報がある：番号 項目名 判定。特記：〇〇（特記がない場合は「特記：」以降を省略）
 情報がない：番号 項目名 情報なし。（※判定を書かない）
@@ -161,8 +162,14 @@ impl ClaudeClient {
         }
     }
 
-    pub async fn format_transcription(&self, text: &str, custom_prompt: Option<&str>) -> Result<String, String> {
-        let system = custom_prompt.filter(|s| !s.is_empty()).unwrap_or(SYSTEM_PROMPT);
+    pub async fn format_transcription(
+        &self,
+        text: &str,
+        custom_prompt: Option<&str>,
+    ) -> Result<String, String> {
+        let system = custom_prompt
+            .filter(|s| !s.is_empty())
+            .unwrap_or(SYSTEM_PROMPT);
         let request = ClaudeRequest {
             model: "claude-opus-4-8".to_string(),
             max_tokens: 8192,
