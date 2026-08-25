@@ -8,6 +8,7 @@ const inter = Inter({ subsets: ['latin'], weight: ['700'], variable: '--font-int
 import { downloadExcel } from '@/lib/excel'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
 import { useRecording, getExtFromMime } from './RecordingContext'
+import MarkdownText from './MarkdownText'
 
 export default function FormatForm() {
   const router = useRouter()
@@ -530,9 +531,7 @@ export default function FormatForm() {
               Excelをダウンロード
             </button>
           </div>
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
-            {result}
-          </div>
+          <MarkdownText className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900 leading-relaxed" text={result} />
         </div>
       )}
     </div>

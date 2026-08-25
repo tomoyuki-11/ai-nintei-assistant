@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { downloadExcel } from '@/lib/excel'
+import MarkdownText from '../components/MarkdownText'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
 
 type Transcription = {
@@ -312,9 +313,7 @@ export default function HistoryPage() {
                       </button>
                     </div>
                     {openFormattedId === item.id && (
-                      <div className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
-                        {item.formatted}
-                      </div>
+                      <MarkdownText className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-900 leading-relaxed" text={item.formatted!} />
                     )}
                   </div>
                 )}

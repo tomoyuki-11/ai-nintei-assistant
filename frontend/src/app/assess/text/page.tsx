@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { downloadExcel } from '@/lib/excel'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
 import PlanLimitModal, { checkPlanLimit, LimitPlan } from '../../components/PlanLimitModal'
+import MarkdownText from '../../components/MarkdownText'
 
 export default function TextPage() {
   const router = useRouter()
@@ -138,9 +139,7 @@ export default function TextPage() {
                 Excelをダウンロード
               </button>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
-              {result}
-            </div>
+            <MarkdownText className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900 leading-relaxed" text={result} />
             <button onClick={handleReset} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
               新しいテキストを整形する
             </button>

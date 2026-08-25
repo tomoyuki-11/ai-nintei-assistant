@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { authHeaders, isAuthenticated } from '@/lib/auth'
 import { downloadExcel } from '@/lib/excel'
+import MarkdownText from './components/MarkdownText'
 
 type Transcription = {
   id: string
@@ -273,9 +274,7 @@ export default function HomePage() {
                         >Excelをダウンロード</button>
                       </div>
                       {openFormattedId === item.id && (
-                        <div className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
-                          {item.formatted}
-                        </div>
+                        <MarkdownText className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-900 leading-relaxed" text={item.formatted!} />
                       )}
                     </div>
                   )}
