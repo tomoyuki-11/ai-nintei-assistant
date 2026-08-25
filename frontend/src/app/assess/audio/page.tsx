@@ -72,9 +72,10 @@ async function clearUploadFile(): Promise<void> {
 
 export default function AudioPage() {
   const router = useRouter()
-  const { isTranscribing, setText, transcribeFile, recordingError, setRecordingError } = useRecording()
+  const { isTranscribing, setText, transcribeByPath, recordingError, setRecordingError } = useRecording()
 
   const [file, setFile] = useState<File | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
   const [isFormatting, setIsFormatting] = useState(false)
   const [result, setResult] = useState('')
   const [error, setError] = useState('')
@@ -113,10 +114,36 @@ export default function AudioPage() {
     setError('')
     cancelledRef.current = false
 
-    const transcribedText = await transcribeFile(file)
+    // Step 1: サーバーに音声ファイルをアップロード
+    setIsUploading(true)
+    let audioPath: string
+    try {
+      const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/audio-upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'audio/mp4', ...authHeaders() },
+        body: file,
+      })
+      if (!uploadRes.ok) {
+        setError('音声ファイルのアップロードに失敗しました。もう一度お試しください。')
+        return
+      }
+      const uploadData = await uploadRes.json()
+      audioPath = uploadData.audio_path
+    } catch {
+      setError('ネットワークエラーが発生しました。インターネット接続を確認してください。')
+      return
+    } finally {
+      setIsUploading(false)
+    }
+
+    if (cancelledRef.current) return
+
+    // Step 2: サーバー側で文字起こし（ポーリング方式）
+    const transcribedText = await transcribeByPath(audioPath)
     if (cancelledRef.current) return
     if (!transcribedText.trim()) return
 
+    // Step 3: Claude API で整形
     setIsFormatting(true)
     const controller = new AbortController()
     abortControllerRef.current = controller
@@ -136,12 +163,10 @@ export default function AudioPage() {
       setResult(data.formatted)
       clearUploadFile()
       setText('')
-      // 保存・課金（クライアントが結果を受け取った後に実行）
-      // 音声アップロード完了を待ってから保存（transcribeFile内でアップロード開始済み）
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ text: transcribedText, formatted: data.formatted, save_text: false }),
+        body: JSON.stringify({ text: transcribedText, formatted: data.formatted, audio_path: audioPath, save_text: false }),
       }).catch(() => {})
       window.dispatchEvent(new Event('planStatusChanged'))
     } catch (e) {
@@ -177,7 +202,7 @@ export default function AudioPage() {
     window.scrollTo(0, 0)
   }
 
-  const isBusy = isTranscribing || isFormatting
+  const isBusy = isUploading || isTranscribing || isFormatting
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -190,7 +215,7 @@ export default function AudioPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
             <p className="text-sm font-semibold text-gray-900 mb-2">
-              {isTranscribing ? '文字起こし' : '整形'}をキャンセルしました
+              {isUploading ? 'アップロード' : isTranscribing ? '文字起こし' : '整形'}をキャンセルしました
             </p>
             <p className="text-xs text-gray-500 mb-5">もう一度実行する場合はファイルを選択し直してください。</p>
             <button onClick={handleCancelConfirm} className="w-full rounded-lg bg-gray-700 px-4 py-2 text-sm text-white font-medium hover:bg-gray-800 transition-colors">閉じる</button>
@@ -237,7 +262,7 @@ export default function AudioPage() {
               <div className="py-4 text-center">
                 <div className="inline-block w-7 h-7 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-3" />
                 <p className="text-sm font-medium text-gray-700">
-                  {isTranscribing ? '文字起こし中...' : 'AI整形中...'}
+                  {isUploading ? 'アップロード中...' : isTranscribing ? '文字起こし中...' : 'AI整形中...'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">しばらくお待ちください</p>
               </div>
