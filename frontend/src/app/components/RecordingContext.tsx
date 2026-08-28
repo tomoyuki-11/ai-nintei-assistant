@@ -1,108 +1,131 @@
-'use client'
+"use client";
 
-import { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react'
-import { authHeaders } from '@/lib/auth'
+import {
+  createContext,
+  useContext,
+  useRef,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
+import { authHeaders } from "@/lib/auth";
 
 // ── 大容量ファイル用ヘルパー（録音ロジックとは独立） ──────────────────────────
 
 /** Float32 PCM サンプル列を 16bit モノラル WAV の Blob に変換する */
 function float32ToWav(samples: Float32Array, sampleRate: number): Blob {
-  const dataLen = samples.length * 2
-  const buf = new ArrayBuffer(44 + dataLen)
-  const v = new DataView(buf)
-  const s4 = (o: number, str: string) => { for (let i = 0; i < 4; i++) v.setUint8(o + i, str.charCodeAt(i)) }
-  s4(0, 'RIFF'); v.setUint32(4, 36 + dataLen, true)
-  s4(8, 'WAVE'); s4(12, 'fmt ')
-  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true)
-  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true)
-  v.setUint16(32, 2, true); v.setUint16(34, 16, true)
-  s4(36, 'data'); v.setUint32(40, dataLen, true)
-  let o = 44
+  const dataLen = samples.length * 2;
+  const buf = new ArrayBuffer(44 + dataLen);
+  const v = new DataView(buf);
+  const s4 = (o: number, str: string) => {
+    for (let i = 0; i < 4; i++) v.setUint8(o + i, str.charCodeAt(i));
+  };
+  s4(0, "RIFF");
+  v.setUint32(4, 36 + dataLen, true);
+  s4(8, "WAVE");
+  s4(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  s4(36, "data");
+  v.setUint32(40, dataLen, true);
+  let o = 44;
   for (let i = 0; i < samples.length; i++) {
-    const x = Math.max(-1, Math.min(1, samples[i]))
-    v.setInt16(o, x * (x < 0 ? 32768 : 32767), true); o += 2
+    const x = Math.max(-1, Math.min(1, samples[i]));
+    v.setInt16(o, x * (x < 0 ? 32768 : 32767), true);
+    o += 2;
   }
-  return new Blob([buf], { type: 'audio/wav' })
+  return new Blob([buf], { type: "audio/wav" });
 }
 
 /** WAV Blob を /api/transcribe に送り、文字起こしテキストを返す */
-async function sendWavToTranscribe(wav: Blob, filename: string): Promise<string | null> {
+async function sendWavToTranscribe(
+  wav: Blob,
+  filename: string,
+): Promise<string | null> {
   try {
-    const formData = new FormData()
-    formData.append('audio', wav, filename)
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/transcribe`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: formData,
-    })
+    const formData = new FormData();
+    formData.append("audio", wav, filename);
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe`,
+      {
+        method: "POST",
+        headers: authHeaders(),
+        body: formData,
+      },
+    );
     if (!res.ok) {
-      const err = await res.text().catch(() => '')
-      console.error(`[sendWavToTranscribe] HTTP ${res.status}: ${err}`)
-      return null
+      const err = await res.text().catch(() => "");
+      console.error(`[sendWavToTranscribe] HTTP ${res.status}: ${err}`);
+      return null;
     }
-    const data = await res.json()
-    return data.text ?? ''
+    const data = await res.json();
+    return data.text ?? "";
   } catch (e) {
-    console.error('[sendWavToTranscribe]', e)
-    return null
+    console.error("[sendWavToTranscribe]", e);
+    return null;
   }
 }
 
 type RecordingContextType = {
-  isRecording: boolean
-  isPaused: boolean
-  isTranscribing: boolean
-  text: string
-  setText: (text: string) => void
-  recordingError: string
-  setRecordingError: (error: string) => void
-  pendingAudio: Blob | null
-  downloadableAudio: Blob | null
-  hasPendingRecovery: boolean
-  startRecording: () => void
-  stopRecording: () => Promise<string>
-  pauseRecording: () => void
-  resumeRecording: () => void
-  transcribeFile: (file: File | Blob) => Promise<string>
-  transcribeBlob: (blob: Blob) => Promise<string>
-  transcribeRecording: () => Promise<string>
-  retryTranscription: () => Promise<string>
-  recoverAndTranscribe: () => Promise<string>
-  getRecoveryBlob: () => Promise<Blob | null>
-  discardRecovery: () => void
-  downloadAudio: () => Promise<void>
-  clearPendingAudio: () => void
-  clearRecording: () => void
-  transcribeByPath: (audioPath: string) => Promise<string>
-  getAudioUploadPromise: () => Promise<string | null>
-  retryAudioUpload: () => Promise<boolean>
-}
+  isRecording: boolean;
+  isPaused: boolean;
+  isTranscribing: boolean;
+  text: string;
+  setText: (text: string) => void;
+  recordingError: string;
+  setRecordingError: (error: string) => void;
+  pendingAudio: Blob | null;
+  downloadableAudio: Blob | null;
+  hasPendingRecovery: boolean;
+  startRecording: () => void;
+  stopRecording: () => Promise<string>;
+  pauseRecording: () => void;
+  resumeRecording: () => void;
+  transcribeFile: (file: File | Blob) => Promise<string>;
+  transcribeBlob: (blob: Blob) => Promise<string>;
+  transcribeRecording: () => Promise<string>;
+  retryTranscription: () => Promise<string>;
+  recoverAndTranscribe: () => Promise<string>;
+  getRecoveryBlob: () => Promise<Blob | null>;
+  discardRecovery: () => void;
+  downloadAudio: () => Promise<void>;
+  clearPendingAudio: () => void;
+  clearRecording: () => void;
+  transcribeByPath: (audioPath: string) => Promise<string>;
+  getAudioUploadPromise: () => Promise<string | null>;
+  retryAudioUpload: () => Promise<boolean>;
+};
 
-const RecordingContext = createContext<RecordingContextType | null>(null)
+const RecordingContext = createContext<RecordingContextType | null>(null);
 
-const MAX_WHISPER_BYTES = 24 * 1024 * 1024  // 25MB上限に対して1MB余裕を持たせる
-const DRAFT_KEY = 'transcription_draft'
-const RECOVERY_DB = 'recording_recovery'
-const RECOVERY_STORE = 'chunks'
-const DOWNLOAD_STORE = 'downloadable_audio'
+const MAX_WHISPER_BYTES = 24 * 1024 * 1024; // 25MB上限に対して1MB余裕を持たせる
+const DRAFT_KEY = "transcription_draft";
+const RECOVERY_DB = "recording_recovery";
+const RECOVERY_STORE = "chunks";
+const DOWNLOAD_STORE = "downloadable_audio";
 
 // --- IndexedDB ユーティリティ ---
 
 function openRecoveryDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(RECOVERY_DB, 2)
+    const req = indexedDB.open(RECOVERY_DB, 2);
     req.onupgradeneeded = () => {
-      const db = req.result
+      const db = req.result;
       if (!db.objectStoreNames.contains(RECOVERY_STORE)) {
-        db.createObjectStore(RECOVERY_STORE, { autoIncrement: true })
+        db.createObjectStore(RECOVERY_STORE, { autoIncrement: true });
       }
       if (!db.objectStoreNames.contains(DOWNLOAD_STORE)) {
-        db.createObjectStore(DOWNLOAD_STORE)
+        db.createObjectStore(DOWNLOAD_STORE);
       }
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
 
 async function saveDownloadableAudio(blob: Blob): Promise<void> {
@@ -110,139 +133,162 @@ async function saveDownloadableAudio(blob: Blob): Promise<void> {
     // iOS Safari は Blob を IndexedDB に保存すると OS の temp file として保存する
     // iOS が temp file を削除すると "The object can not be found here" になりデータにアクセスできなくなる
     // ArrayBuffer として値でコピーして保存することで OS による削除を防ぐ
-    const buffer = await readAsArrayBuffer(blob)
-    const db = await openRecoveryDB()
+    const buffer = await readAsArrayBuffer(blob);
+    const db = await openRecoveryDB();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(DOWNLOAD_STORE, 'readwrite')
-      tx.objectStore(DOWNLOAD_STORE).put({ buffer, type: blob.type }, 'audio')
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-    db.close()
-  } catch { /* ストレージエラーは無視 */ }
+      const tx = db.transaction(DOWNLOAD_STORE, "readwrite");
+      tx.objectStore(DOWNLOAD_STORE).put({ buffer, type: blob.type }, "audio");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    /* ストレージエラーは無視 */
+  }
 }
 
 async function getDownloadableAudio(): Promise<Blob | null> {
   try {
-    const db = await openRecoveryDB()
+    const db = await openRecoveryDB();
     const data: unknown = await new Promise((resolve, reject) => {
-      const tx = db.transaction(DOWNLOAD_STORE, 'readonly')
-      const req = tx.objectStore(DOWNLOAD_STORE).get('audio')
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
-    db.close()
-    if (!data) return null
+      const tx = db.transaction(DOWNLOAD_STORE, "readonly");
+      const req = tx.objectStore(DOWNLOAD_STORE).get("audio");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    if (!data) return null;
     // 旧形式: Blob として保存されている場合（移行期の互換対応）
-    if (data instanceof Blob) return data
+    if (data instanceof Blob) return data;
     // 新形式: { buffer: ArrayBuffer, type: string } として保存されている場合
-    const { buffer, type } = data as { buffer: ArrayBuffer; type: string }
-    return new Blob([buffer], { type: type || 'audio/mp4' })
+    const { buffer, type } = data as { buffer: ArrayBuffer; type: string };
+    return new Blob([buffer], { type: type || "audio/mp4" });
   } catch {
-    return null
+    return null;
   }
 }
 
 async function clearDownloadableAudio(): Promise<void> {
   try {
-    const db = await openRecoveryDB()
+    const db = await openRecoveryDB();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(DOWNLOAD_STORE, 'readwrite')
-      tx.objectStore(DOWNLOAD_STORE).delete('audio')
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-    db.close()
-  } catch { /* 無視 */ }
+      const tx = db.transaction(DOWNLOAD_STORE, "readwrite");
+      tx.objectStore(DOWNLOAD_STORE).delete("audio");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    /* 無視 */
+  }
 }
 
 async function savePendingAudioToDB(blob: Blob): Promise<void> {
   try {
-    const buffer = await readAsArrayBuffer(blob)
-    const db = await openRecoveryDB()
+    const buffer = await readAsArrayBuffer(blob);
+    const db = await openRecoveryDB();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(DOWNLOAD_STORE, 'readwrite')
-      tx.objectStore(DOWNLOAD_STORE).put({ buffer, type: blob.type }, 'pending')
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-    db.close()
-  } catch { /* ストレージエラーは無視 */ }
+      const tx = db.transaction(DOWNLOAD_STORE, "readwrite");
+      tx.objectStore(DOWNLOAD_STORE).put(
+        { buffer, type: blob.type },
+        "pending",
+      );
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    /* ストレージエラーは無視 */
+  }
 }
 
 async function getPendingAudioFromDB(): Promise<Blob | null> {
   try {
-    const db = await openRecoveryDB()
+    const db = await openRecoveryDB();
     const data: unknown = await new Promise((resolve, reject) => {
-      const tx = db.transaction(DOWNLOAD_STORE, 'readonly')
-      const req = tx.objectStore(DOWNLOAD_STORE).get('pending')
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
-    db.close()
-    if (!data) return null
-    if (data instanceof Blob) return data
-    const { buffer, type } = data as { buffer: ArrayBuffer; type: string }
-    return new Blob([buffer], { type: type || 'audio/mp4' })
+      const tx = db.transaction(DOWNLOAD_STORE, "readonly");
+      const req = tx.objectStore(DOWNLOAD_STORE).get("pending");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    if (!data) return null;
+    if (data instanceof Blob) return data;
+    const { buffer, type } = data as { buffer: ArrayBuffer; type: string };
+    return new Blob([buffer], { type: type || "audio/mp4" });
   } catch {
-    return null
+    return null;
   }
 }
 
 async function clearPendingAudioFromDB(): Promise<void> {
   try {
-    const db = await openRecoveryDB()
+    const db = await openRecoveryDB();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(DOWNLOAD_STORE, 'readwrite')
-      tx.objectStore(DOWNLOAD_STORE).delete('pending')
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-    db.close()
-  } catch { /* 無視 */ }
+      const tx = db.transaction(DOWNLOAD_STORE, "readwrite");
+      tx.objectStore(DOWNLOAD_STORE).delete("pending");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    /* 無視 */
+  }
 }
 
 async function appendChunkToDB(chunk: Blob, mimeType: string): Promise<void> {
   try {
-    const db = await openRecoveryDB()
+    const db = await openRecoveryDB();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(RECOVERY_STORE, 'readwrite')
-      tx.objectStore(RECOVERY_STORE).add({ chunk, mimeType })
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-    db.close()
-  } catch { /* ストレージエラーは無視 */ }
+      const tx = db.transaction(RECOVERY_STORE, "readwrite");
+      tx.objectStore(RECOVERY_STORE).add({ chunk, mimeType });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    /* ストレージエラーは無視 */
+  }
 }
 
-async function getRecoveryData(): Promise<{ chunks: Blob[]; mimeType: string } | null> {
+async function getRecoveryData(): Promise<{
+  chunks: Blob[];
+  mimeType: string;
+} | null> {
   try {
-    const db = await openRecoveryDB()
-    const entries: Array<{ chunk: Blob; mimeType: string }> = await new Promise((resolve, reject) => {
-      const tx = db.transaction(RECOVERY_STORE, 'readonly')
-      const req = tx.objectStore(RECOVERY_STORE).getAll()
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
-    db.close()
-    if (entries.length === 0) return null
-    return { chunks: entries.map(e => e.chunk), mimeType: entries[0].mimeType }
+    const db = await openRecoveryDB();
+    const entries: Array<{ chunk: Blob; mimeType: string }> = await new Promise(
+      (resolve, reject) => {
+        const tx = db.transaction(RECOVERY_STORE, "readonly");
+        const req = tx.objectStore(RECOVERY_STORE).getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      },
+    );
+    db.close();
+    if (entries.length === 0) return null;
+    return {
+      chunks: entries.map((e) => e.chunk),
+      mimeType: entries[0].mimeType,
+    };
   } catch {
-    return null
+    return null;
   }
 }
 
 async function clearRecoveryDB(): Promise<void> {
   try {
-    const db = await openRecoveryDB()
+    const db = await openRecoveryDB();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(RECOVERY_STORE, 'readwrite')
-      tx.objectStore(RECOVERY_STORE).clear()
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-    db.close()
-  } catch { /* 無視 */ }
+      const tx = db.transaction(RECOVERY_STORE, "readwrite");
+      tx.objectStore(RECOVERY_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    /* 無視 */
+  }
 }
 
 // --- 音声ユーティリティ ---
@@ -250,822 +296,942 @@ async function clearRecoveryDB(): Promise<void> {
 // Whisperの25MB上限に合わせてチャンク配列をグループ分割する
 // chunks[0]はwebm/m4a両方で初期化セグメント（ヘッダ）を含むため各グループ先頭に付与する
 function splitChunksIntoGroups(chunks: Blob[], maxBytes: number): Blob[][] {
-  if (chunks.length === 0) return []
-  const groups: Blob[][] = []
-  let current: Blob[] = [chunks[0]]
-  let currentSize = chunks[0].size
+  if (chunks.length === 0) return [];
+  const groups: Blob[][] = [];
+  let current: Blob[] = [chunks[0]];
+  let currentSize = chunks[0].size;
   for (let i = 1; i < chunks.length; i++) {
     if (currentSize + chunks[i].size > maxBytes && current.length > 1) {
-      groups.push(current)
-      current = [chunks[0], chunks[i]]
-      currentSize = chunks[0].size + chunks[i].size
+      groups.push(current);
+      current = [chunks[0], chunks[i]];
+      currentSize = chunks[0].size + chunks[i].size;
     } else {
-      current.push(chunks[i])
-      currentSize += chunks[i].size
+      current.push(chunks[i]);
+      currentSize += chunks[i].size;
     }
   }
-  if (current.length > 0) groups.push(current)
-  return groups
+  if (current.length > 0) groups.push(current);
+  return groups;
 }
 
 export function getExtFromMime(mimeType: string): string {
-  if (mimeType.includes('ogg')) return 'ogg'
-  if (mimeType.includes('flac')) return 'flac'
-  if (mimeType.includes('mp3') || mimeType.includes('mpeg')) return 'mp3'
-  if (mimeType.includes('mp4') || mimeType.includes('m4a')) return 'mp4'
-  if (mimeType.includes('wav')) return 'wav'
-  return 'webm'
+  if (mimeType.includes("ogg")) return "ogg";
+  if (mimeType.includes("flac")) return "flac";
+  if (mimeType.includes("mp3") || mimeType.includes("mpeg")) return "mp3";
+  if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "mp4";
+  if (mimeType.includes("wav")) return "wav";
+  return "webm";
 }
 
 function getMimeFromExt(ext: string): string {
   switch (ext.toLowerCase()) {
-    case 'mp4': case 'm4a': return 'audio/mp4'
-    case 'ogg': case 'oga': return 'audio/ogg'
-    case 'mp3': case 'mpeg': case 'mpga': return 'audio/mpeg'
-    case 'wav': return 'audio/wav'
-    case 'flac': return 'audio/flac'
-    default: return 'audio/webm'
+    case "mp4":
+    case "m4a":
+      return "audio/mp4";
+    case "ogg":
+    case "oga":
+      return "audio/ogg";
+    case "mp3":
+    case "mpeg":
+    case "mpga":
+      return "audio/mpeg";
+    case "wav":
+      return "audio/wav";
+    case "flac":
+      return "audio/flac";
+    default:
+      return "audio/webm";
   }
 }
 
 // --- Whisperへのチャンク送信（分割対応） ---
 
 // 指数バックオフ: 10秒→30秒→60秒で最大3回リトライ
-const WHISPER_RETRY_DELAYS = [10000, 30000, 60000]
+const WHISPER_RETRY_DELAYS = [10000, 30000, 60000];
 
 // --- 音声チャンクアップロード（iOS Safari の大容量 Blob 制限回避） ---
 
-const UPLOAD_CHUNK_SIZE = 3 * 1024 * 1024  // 3MB
+const UPLOAD_CHUNK_SIZE = 3 * 1024 * 1024; // 3MB
 
 // IndexedDB から復元した Blob は iOS Safari で fetch body / blob URL に直接使えないため
 // FileReader 経由で ArrayBuffer としてメモリに読み込んでから使用する
 function readAsArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as ArrayBuffer)
-    reader.onerror = () => reject(reader.error)
-    reader.readAsArrayBuffer(blob)
-  })
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(blob);
+  });
 }
 
 async function uploadInChunks(
   blob: Blob,
   mimeType: string,
   apiUrl: string,
-  headers: Record<string, string>
+  headers: Record<string, string>,
 ): Promise<string | null> {
-  const uploadId = crypto.randomUUID()
-  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  const uploadId = crypto.randomUUID();
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
 
   // iOS: IndexedDB blob の slice() も fetch body に使えないため
   // 全体を一度 ArrayBuffer に読み込んでインメモリ blob を作成してからチャンク分割する
-  let workingBlob = blob
+  let workingBlob = blob;
   if (isIOS) {
     try {
-      const buffer = await readAsArrayBuffer(blob)
-      workingBlob = new Blob([buffer], { type: mimeType })
+      const buffer = await readAsArrayBuffer(blob);
+      workingBlob = new Blob([buffer], { type: mimeType });
     } catch {
-      return null
+      return null;
     }
   }
 
-  const totalChunks = Math.ceil(workingBlob.size / UPLOAD_CHUNK_SIZE)
-  if (totalChunks === 0) return null
+  const totalChunks = Math.ceil(workingBlob.size / UPLOAD_CHUNK_SIZE);
+  if (totalChunks === 0) return null;
 
   for (let i = 0; i < totalChunks; i++) {
-    const start = i * UPLOAD_CHUNK_SIZE
-    const chunk = workingBlob.slice(start, Math.min(start + UPLOAD_CHUNK_SIZE, workingBlob.size))
+    const start = i * UPLOAD_CHUNK_SIZE;
+    const chunk = workingBlob.slice(
+      start,
+      Math.min(start + UPLOAD_CHUNK_SIZE, workingBlob.size),
+    );
     try {
       const res = await fetch(`${apiUrl}/api/audio-upload/chunk`, {
-        method: 'POST',
+        method: "POST",
         headers: {
           ...headers,
-          'Content-Type': mimeType,
-          'X-Upload-Id': uploadId,
-          'X-Chunk-Index': String(i),
-          'X-Total-Chunks': String(totalChunks),
+          "Content-Type": mimeType,
+          "X-Upload-Id": uploadId,
+          "X-Chunk-Index": String(i),
+          "X-Total-Chunks": String(totalChunks),
         },
         body: chunk,
-      })
-      if (!res.ok) return null
-      const data = await res.json()
-      if (data.audio_path) return data.audio_path as string
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.audio_path) return data.audio_path as string;
     } catch {
-      return null
+      return null;
     }
   }
-  return null
+  return null;
 }
 
-async function callWithBackoff(fn: () => Promise<string | null>): Promise<string | null> {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return null
-  let result = await fn()
+async function callWithBackoff(
+  fn: () => Promise<string | null>,
+): Promise<string | null> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return null;
+  let result = await fn();
   for (const delay of WHISPER_RETRY_DELAYS) {
-    if (result !== null) break
-    await new Promise((r) => setTimeout(r, delay))
-    if (typeof navigator !== 'undefined' && !navigator.onLine) break
-    result = await fn()
+    if (result !== null) break;
+    await new Promise((r) => setTimeout(r, delay));
+    if (typeof navigator !== "undefined" && !navigator.onLine) break;
+    result = await fn();
   }
-  return result
+  return result;
 }
 
 async function transcribeChunks(
   chunks: Blob[],
   mimeType: string,
-  callWhisper: (blob: Blob) => Promise<string | null>
+  callWhisper: (blob: Blob) => Promise<string | null>,
 ): Promise<{ result: string | null; failedGroupBlob?: Blob; fullBlob: Blob }> {
-  const fullBlob = new Blob(chunks, { type: mimeType })
-  const totalSize = chunks.reduce((sum, c) => sum + c.size, 0)
+  const fullBlob = new Blob(chunks, { type: mimeType });
+  const totalSize = chunks.reduce((sum, c) => sum + c.size, 0);
 
   if (totalSize <= MAX_WHISPER_BYTES) {
-    const transcribed = await callWithBackoff(() => callWhisper(fullBlob))
-    return { result: transcribed, fullBlob }
+    const transcribed = await callWithBackoff(() => callWhisper(fullBlob));
+    return { result: transcribed, fullBlob };
   }
 
   // 25MB超：チャンク分割して順次送信
-  const groups = splitChunksIntoGroups(chunks, MAX_WHISPER_BYTES)
-  const accumulated: string[] = []
+  const groups = splitChunksIntoGroups(chunks, MAX_WHISPER_BYTES);
+  const accumulated: string[] = [];
   for (const group of groups) {
-    const groupBlob = new Blob(group, { type: mimeType })
-    const result = await callWithBackoff(() => callWhisper(groupBlob))
+    const groupBlob = new Blob(group, { type: mimeType });
+    const result = await callWithBackoff(() => callWhisper(groupBlob));
     if (result === null) {
-      return { result: null, failedGroupBlob: groupBlob, fullBlob }
+      return { result: null, failedGroupBlob: groupBlob, fullBlob };
     }
-    if (result !== '') accumulated.push(result)
+    if (result !== "") accumulated.push(result);
   }
-  return { result: accumulated.join('\n'), fullBlob }
+  return { result: accumulated.join("\n"), fullBlob };
 }
 
 // --- Provider ---
 
 export function RecordingProvider({ children }: { children: React.ReactNode }) {
-  const [isRecording, setIsRecording] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
-  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [text, setText] = useState(() =>
-    typeof window !== 'undefined' ? (localStorage.getItem(DRAFT_KEY) ?? '') : ''
-  )
-  const [recordingError, setRecordingError] = useState('')
-  const [pendingAudio, setPendingAudio] = useState<Blob | null>(null)
-  const [downloadableAudio, setDownloadableAudio] = useState<Blob | null>(null)
-  const [hasPendingRecovery, setHasPendingRecovery] = useState(false)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-  const streamRef = useRef<MediaStream | null>(null)
-  const downloadableAudioInitRef = useRef(false)
-  const pendingAudioInitRef = useRef(false)
-  const userStoppedRef = useRef(false)
-  const audioUploadPromiseRef = useRef<Promise<string | null>>(Promise.resolve(null))
+    typeof window !== "undefined"
+      ? (localStorage.getItem(DRAFT_KEY) ?? "")
+      : "",
+  );
+  const [recordingError, setRecordingError] = useState("");
+  const [pendingAudio, setPendingAudio] = useState<Blob | null>(null);
+  const [downloadableAudio, setDownloadableAudio] = useState<Blob | null>(null);
+  const [hasPendingRecovery, setHasPendingRecovery] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const downloadableAudioInitRef = useRef(false);
+  const pendingAudioInitRef = useRef(false);
+  const userStoppedRef = useRef(false);
+  const audioUploadPromiseRef = useRef<Promise<string | null>>(
+    Promise.resolve(null),
+  );
 
-  const textRef = useRef('')
-  textRef.current = text
+  const textRef = useRef("");
+  textRef.current = text;
 
   // テキストをlocalStorageに随時保存してリロード後も復元できるようにする
   useEffect(() => {
     if (text) {
-      localStorage.setItem(DRAFT_KEY, text)
+      localStorage.setItem(DRAFT_KEY, text);
     } else {
-      localStorage.removeItem(DRAFT_KEY)
+      localStorage.removeItem(DRAFT_KEY);
     }
-  }, [text])
+  }, [text]);
 
   // 起動時にIndexedDBの回復データを確認する
   useEffect(() => {
-    getRecoveryData().then(data => {
-      if (data && data.chunks.length > 0) setHasPendingRecovery(true)
-    })
-  }, [])
+    getRecoveryData().then((data) => {
+      if (data && data.chunks.length > 0) setHasPendingRecovery(true);
+    });
+  }, []);
 
   // 起動時にダウンロード可能な音声をIndexedDBから復元する
   useEffect(() => {
-    getDownloadableAudio().then(blob => {
-      downloadableAudioInitRef.current = true
-      if (blob) setDownloadableAudio(blob)
-    })
-  }, [])
+    getDownloadableAudio().then((blob) => {
+      downloadableAudioInitRef.current = true;
+      if (blob) setDownloadableAudio(blob);
+    });
+  }, []);
 
   // downloadableAudioが変わるたびにIndexedDBへ同期する（初回null状態はスキップ）
   useEffect(() => {
-    if (!downloadableAudioInitRef.current) return
+    if (!downloadableAudioInitRef.current) return;
     if (downloadableAudio) {
-      saveDownloadableAudio(downloadableAudio)
+      saveDownloadableAudio(downloadableAudio);
     } else {
-      clearDownloadableAudio()
+      clearDownloadableAudio();
     }
-  }, [downloadableAudio])
+  }, [downloadableAudio]);
 
   // 起動時にpendingAudioをIndexedDBから復元する
   useEffect(() => {
-    getPendingAudioFromDB().then(blob => {
-      pendingAudioInitRef.current = true
-      if (blob) setPendingAudio(blob)
-    })
-  }, [])
+    getPendingAudioFromDB().then((blob) => {
+      pendingAudioInitRef.current = true;
+      if (blob) setPendingAudio(blob);
+    });
+  }, []);
 
   // pendingAudioが変わるたびにIndexedDBへ同期する（初回null状態はスキップ）
   useEffect(() => {
-    if (!pendingAudioInitRef.current) return
+    if (!pendingAudioInitRef.current) return;
     if (pendingAudio) {
-      savePendingAudioToDB(pendingAudio)
+      savePendingAudioToDB(pendingAudio);
     } else {
-      clearPendingAudioFromDB()
+      clearPendingAudioFromDB();
     }
-  }, [pendingAudio])
+  }, [pendingAudio]);
 
   // 画面が隠れる直前（電話着信・タブ切り替え等）に最新チャンクをDBへ書き出す
   useEffect(() => {
     function flushOnHide() {
-      if (mediaRecorderRef.current?.state === 'recording') {
-        try { mediaRecorderRef.current.requestData() } catch {}
+      if (mediaRecorderRef.current?.state === "recording") {
+        try {
+          mediaRecorderRef.current.requestData();
+        } catch {}
       }
     }
     function handleVisibilityChange() {
-      if (document.hidden) flushOnHide()
+      if (document.hidden) flushOnHide();
     }
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('pagehide', flushOnHide)
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", flushOnHide);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('pagehide', flushOnHide)
-    }
-  }, [])
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", flushOnHide);
+    };
+  }, []);
 
   // Whisperが無音音声に対して返す既知のハルシネーションパターン
   const HALLUCINATIONS = [
-    'ご視聴ありがとうございました',
-    'チャンネル登録',
-    '字幕は自動生成されています',
-    'ありがとうございました',
-    'Thank you for watching',
-    'Subtitles by',
-  ]
+    "ご視聴ありがとうございました",
+    "チャンネル登録",
+    "字幕は自動生成されています",
+    "ありがとうございました",
+    "本日はご覧いただきありがとうございます",
+    "Thank you for watching",
+    "Subtitles by",
+  ];
+
   function isHallucination(text: string): boolean {
-    const t = text.trim()
-    if (t.length === 0) return true
+    const t = text.trim();
+    if (t.length === 0) return true;
     // 100文字超の場合は実音声があると判断してスキップ
-    if (t.length > 100) return false
-    return HALLUCINATIONS.some((h) => t.includes(h))
+    if (t.length > 100) return false;
+    return HALLUCINATIONS.some((h) => t.includes(h));
   }
 
   // 音声ファイルをサーバーへアップロード（iOS や大容量は自動でチャンク分割）
-  const uploadAudioToServer = useCallback(async (blob: Blob, mimeType: string): Promise<string | null> => {
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL!
-      const headers = authHeaders()
-      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  const uploadAudioToServer = useCallback(
+    async (blob: Blob, mimeType: string): Promise<string | null> => {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL!;
+        const headers = authHeaders();
+        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
 
-      // iOS は Blob が大きいと fetch body でエラーになるため、常にチャンク分割
-      // 非 iOS でも 20MB 超はチャンク分割して安全に送信
-      if (isIOS || blob.size > 20 * 1024 * 1024) {
-        return await uploadInChunks(blob, mimeType, apiUrl, headers)
+        // iOS は Blob が大きいと fetch body でエラーになるため、常にチャンク分割
+        // 非 iOS でも 20MB 超はチャンク分割して安全に送信
+        if (isIOS || blob.size > 20 * 1024 * 1024) {
+          return await uploadInChunks(blob, mimeType, apiUrl, headers);
+        }
+
+        const res = await fetch(`${apiUrl}/api/audio-upload`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": mimeType },
+          body: blob,
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return (data.audio_path as string) ?? null;
+      } catch {
+        return null;
       }
-
-      const res = await fetch(`${apiUrl}/api/audio-upload`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': mimeType },
-        body: blob,
-      })
-      if (!res.ok) return null
-      const data = await res.json()
-      return (data.audio_path as string) ?? null
-    } catch {
-      return null
-    }
-  }, [])
+    },
+    [],
+  );
 
   // Whisper API呼び出し
   // 戻り値: 文字起こしテキスト（成功）/ null（API/ネットワークエラー）/ ''（無音・ハルシネーション）
-  const callWhisper = useCallback(async (blob: Blob, filename?: string): Promise<string | null> => {
-    setIsTranscribing(true)
-    try {
-      const rawExt = filename ? (filename.split('.').pop()?.toLowerCase() ?? '') : ''
-      const ext = rawExt || getExtFromMime(blob.type || 'audio/webm')
-      const mimeType = blob.type || getMimeFromExt(ext)
-      const name = filename || `audio.${ext}`
+  const callWhisper = useCallback(
+    async (blob: Blob, filename?: string): Promise<string | null> => {
+      setIsTranscribing(true);
+      try {
+        const rawExt = filename
+          ? (filename.split(".").pop()?.toLowerCase() ?? "")
+          : "";
+        const ext = rawExt || getExtFromMime(blob.type || "audio/webm");
+        const mimeType = blob.type || getMimeFromExt(ext);
+        const name = filename || `audio.${ext}`;
 
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe`
-      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+        const url = `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe`;
+        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
 
-      let ok: boolean
-      let responseText: string
+        let ok: boolean;
+        let responseText: string;
 
-      if (isIOS) {
-        // iOS Safari: FormData のマルチパート送信が壊れるため Blob を直接送信
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { ...authHeaders(), 'Content-Type': mimeType },
-          body: blob,
-        })
-        ok = res.ok
-        if (ok) {
-          responseText = await res.text()
+        if (isIOS) {
+          // iOS Safari: FormData のマルチパート送信が壊れるため Blob を直接送信
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { ...authHeaders(), "Content-Type": mimeType },
+            body: blob,
+          });
+          ok = res.ok;
+          if (ok) {
+            responseText = await res.text();
+          } else {
+            const errText = await res.text().catch(() => "");
+            console.error(
+              `[/api/transcribe] iOS HTTP ${res.status}: ${errText}`,
+            );
+            responseText = "";
+          }
         } else {
-          const errText = await res.text().catch(() => '')
-          console.error(`[/api/transcribe] iOS HTTP ${res.status}: ${errText}`)
-          responseText = ''
+          const formData = new FormData();
+          formData.append("audio", blob, name);
+          const res = await fetch(url, {
+            method: "POST",
+            headers: authHeaders(),
+            body: formData,
+          });
+          ok = res.ok;
+          if (ok) {
+            responseText = await res.text();
+          } else {
+            const errText = await res.text().catch(() => "");
+            console.error(`[/api/transcribe] HTTP ${res.status}: ${errText}`);
+            responseText = "";
+          }
         }
-      } else {
-        const formData = new FormData()
-        formData.append('audio', blob, name)
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: authHeaders(),
-          body: formData,
-        })
-        ok = res.ok
-        if (ok) {
-          responseText = await res.text()
-        } else {
-          const errText = await res.text().catch(() => '')
-          console.error(`[/api/transcribe] HTTP ${res.status}: ${errText}`)
-          responseText = ''
+
+        if (!ok) return null;
+
+        const data = JSON.parse(responseText);
+        const transcribed = data.text || "";
+        if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
+          return "";
         }
+        return transcribed;
+      } catch {
+        return null;
+      } finally {
+        setIsTranscribing(false);
       }
-
-      if (!ok) return null
-
-      const data = JSON.parse(responseText)
-      const transcribed = data.text || ''
-      if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
-        return ''
-      }
-      return transcribed
-    } catch {
-      return null
-    } finally {
-      setIsTranscribing(false)
-    }
-  }, [])
+    },
+    [],
+  );
 
   // 文字起こし結果を既存テキストに追記してstateを更新
   const appendTranscription = useCallback((transcribed: string): string => {
-    const current = textRef.current
-    const accumulated = current ? `${current}\n${transcribed}` : transcribed
-    setText(accumulated)
-    return accumulated
-  }, [])
+    const current = textRef.current;
+    const accumulated = current ? `${current}\n${transcribed}` : transcribed;
+    setText(accumulated);
+    return accumulated;
+  }, []);
 
   const startRecording = useCallback(async () => {
     // 新しい録音開始時に前回のリカバリデータ・テキストを破棄
-    clearRecoveryDB()
-    setHasPendingRecovery(false)
-    localStorage.removeItem('pipeline_pending')
-    localStorage.removeItem('pipeline_text')
-    setText('')
-    localStorage.removeItem(DRAFT_KEY)
-    audioUploadPromiseRef.current = Promise.resolve(null)
+    clearRecoveryDB();
+    setHasPendingRecovery(false);
+    localStorage.removeItem("pipeline_pending");
+    localStorage.removeItem("pipeline_text");
+    setText("");
+    localStorage.removeItem(DRAFT_KEY);
+    audioUploadPromiseRef.current = Promise.resolve(null);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      streamRef.current = stream
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
-      const isIOSDevice = /iPhone|iPad|iPod/.test(navigator.userAgent)
+      const isIOSDevice = /iPhone|iPad|iPod/.test(navigator.userAgent);
 
       // iOSはwebm/oggを録音できないためmimeType指定なしでデフォルト（audio/mp4）に任せる
       const selectedMimeType = isIOSDevice
-        ? ''
-        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : 'audio/ogg'
+        ? ""
+        : MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : MediaRecorder.isTypeSupported("audio/webm")
+            ? "audio/webm"
+            : "audio/ogg";
 
       const mediaRecorder = selectedMimeType
         ? new MediaRecorder(stream, { mimeType: selectedMimeType })
-        : new MediaRecorder(stream)
+        : new MediaRecorder(stream);
 
       // 実際に使われているmimeTypeを取得（iOSではaudio/mp4になる）
-      const actualMimeType = mediaRecorder.mimeType || (isIOSDevice ? 'audio/mp4' : 'audio/webm')
+      const actualMimeType =
+        mediaRecorder.mimeType || (isIOSDevice ? "audio/mp4" : "audio/webm");
 
-      mediaRecorderRef.current = mediaRecorder
-      chunksRef.current = []
-      setDownloadableAudio(null)
-      setPendingAudio(null)
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+      setDownloadableAudio(null);
+      setPendingAudio(null);
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
-          chunksRef.current.push(e.data)
+          chunksRef.current.push(e.data);
           // リロード時の復元用にIndexedDBへ随時保存（fire and forget）
-          appendChunkToDB(e.data, actualMimeType)
+          appendChunkToDB(e.data, actualMimeType);
         }
-      }
+      };
 
       // 電話着信など予期せぬ停止のハンドラ（stopRecording呼び出し時に上書きされる）
       function onInterrupted() {
-        if (userStoppedRef.current) return
-        streamRef.current?.getTracks().forEach((t) => t.stop())
-        setIsRecording(false)
-        setIsPaused(false)
+        if (userStoppedRef.current) return;
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        setIsRecording(false);
+        setIsPaused(false);
         if (chunksRef.current.length > 0) {
-          setHasPendingRecovery(true)
-          setRecordingError('通話などにより録音が中断されました。「録音を再開」から続きを録音できます。')
+          setHasPendingRecovery(true);
+          setRecordingError(
+            "通話などにより録音が中断されました。「録音を再開」から続きを録音できます。",
+          );
         } else {
-          setRecordingError('録音が中断されました。もう一度録音してください。')
+          setRecordingError("録音が中断されました。もう一度録音してください。");
         }
       }
-      mediaRecorder.onstop = onInterrupted
-      mediaRecorder.onerror = () => onInterrupted()
+      mediaRecorder.onstop = onInterrupted;
+      mediaRecorder.onerror = () => onInterrupted();
 
-      mediaRecorder.start(1000)
-      setIsRecording(true)
-      setIsPaused(false)
-      setRecordingError('')
+      mediaRecorder.start(1000);
+      setIsRecording(true);
+      setIsPaused(false);
+      setRecordingError("");
     } catch (e: any) {
-      if (e.name === 'NotAllowedError') {
-        setRecordingError('マイクへのアクセスが拒否されています。ブラウザのアドレスバー左のアイコンからマイクの使用を許可してください。')
-      } else if (e.name === 'NotFoundError') {
-        setRecordingError('マイクが見つかりません。マイクが接続されているか確認してください。')
+      if (e.name === "NotAllowedError") {
+        setRecordingError(
+          "マイクへのアクセスが拒否されています。ブラウザのアドレスバー左のアイコンからマイクの使用を許可してください。",
+        );
+      } else if (e.name === "NotFoundError") {
+        setRecordingError(
+          "マイクが見つかりません。マイクが接続されているか確認してください。",
+        );
       } else {
-        setRecordingError(`録音エラーが発生しました（${e.name}）`)
+        setRecordingError(`録音エラーが発生しました（${e.name}）`);
       }
     }
-  }, [])
+  }, []);
 
   const pauseRecording = useCallback(() => {
     try {
-      if (mediaRecorderRef.current?.state === 'recording') {
-        mediaRecorderRef.current.pause()
-        setIsPaused(true)
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.pause();
+        setIsPaused(true);
       }
-    } catch { /* 非対応環境では無視 */ }
-  }, [])
+    } catch {
+      /* 非対応環境では無視 */
+    }
+  }, []);
 
   const resumeRecording = useCallback(() => {
     try {
-      if (mediaRecorderRef.current?.state === 'paused') {
-        mediaRecorderRef.current.resume()
-        setIsPaused(false)
+      if (mediaRecorderRef.current?.state === "paused") {
+        mediaRecorderRef.current.resume();
+        setIsPaused(false);
       }
-    } catch { /* 非対応環境では無視 */ }
-  }, [])
+    } catch {
+      /* 非対応環境では無視 */
+    }
+  }, []);
 
   const stopRecording = useCallback(async (): Promise<string> => {
-    const mediaRecorder = mediaRecorderRef.current
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-      setIsRecording(false)
-      return textRef.current
+    const mediaRecorder = mediaRecorderRef.current;
+    if (!mediaRecorder || mediaRecorder.state === "inactive") {
+      setIsRecording(false);
+      return textRef.current;
     }
 
     return new Promise((resolve) => {
-      userStoppedRef.current = true
+      userStoppedRef.current = true;
       mediaRecorder.onstop = async () => {
-        userStoppedRef.current = false
-        streamRef.current?.getTracks().forEach((t) => t.stop())
-        setIsRecording(false)
-        setIsPaused(false)
+        userStoppedRef.current = false;
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        setIsRecording(false);
+        setIsPaused(false);
 
         // 正常停止したのでIndexedDBの回復データは不要
-        clearRecoveryDB()
+        clearRecoveryDB();
 
-        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
-        const mimeType = chunksRef.current[0]?.type || (isIOS ? 'audio/mp4' : 'audio/webm')
-        const recordedBlob = new Blob(chunksRef.current, { type: mimeType })
-        setDownloadableAudio(recordedBlob)
+        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+        const mimeType =
+          chunksRef.current[0]?.type || (isIOS ? "audio/mp4" : "audio/webm");
+        const recordedBlob = new Blob(chunksRef.current, { type: mimeType });
+        setDownloadableAudio(recordedBlob);
         // chunksRef はここでは破棄しない（transcribeRecording で利用する）
 
-        resolve(textRef.current)
-      }
+        resolve(textRef.current);
+      };
 
-      mediaRecorder.stop()
-    })
-  }, [])
+      mediaRecorder.stop();
+    });
+  }, []);
 
   // 音声ファイルをアップロードして文字起こし（既存テキストに追記）
-  const transcribeFile = useCallback(async (file: File | Blob): Promise<string> => {
-    // ── 大容量ファイル（24MB超）はブラウザでデコード→分割→順次送信 ──────────
-    // 1本の長時間 HTTP リクエストを避けることでプロキシタイムアウトを回避する
-    if (file.size > 24 * 1024 * 1024) {
-      setIsTranscribing(true)
-      try {
-        const arrayBuffer = await file.arrayBuffer()
-        const AudioCtxClass = window.AudioContext ?? (window as unknown as Record<string, typeof AudioContext>)['webkitAudioContext']
-        const ctx = new AudioCtxClass()
-        const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
-        ctx.close()
+  const transcribeFile = useCallback(
+    async (file: File | Blob): Promise<string> => {
+      // ── 大容量ファイル（24MB超）はブラウザでデコード→分割→順次送信 ──────────
+      // 1本の長時間 HTTP リクエストを避けることでプロキシタイムアウトを回避する
+      if (file.size > 24 * 1024 * 1024) {
+        setIsTranscribing(true);
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const AudioCtxClass =
+            window.AudioContext ??
+            (window as unknown as Record<string, typeof AudioContext>)[
+              "webkitAudioContext"
+            ];
+          const ctx = new AudioCtxClass();
+          const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+          ctx.close();
 
-        const sampleRate = audioBuffer.sampleRate
-        // 左チャンネルのみ使用（モノラル化）
-        const channelData = audioBuffer.getChannelData(0)
+          const sampleRate = audioBuffer.sampleRate;
+          // 左チャンネルのみ使用（モノラル化）
+          const channelData = audioBuffer.getChannelData(0);
 
-        // Whisper 25MB 制限に収まるセグメントサイズ（16bit = 2 bytes/sample）
-        const MAX_SAMPLES = Math.floor((23 * 1024 * 1024) / 2)
+          // Whisper 25MB 制限に収まるセグメントサイズ（16bit = 2 bytes/sample）
+          const MAX_SAMPLES = Math.floor((23 * 1024 * 1024) / 2);
 
-        const texts: string[] = []
-        for (let i = 0, start = 0; start < channelData.length; i++, start += MAX_SAMPLES) {
-          const chunk = channelData.slice(start, Math.min(start + MAX_SAMPLES, channelData.length))
-          const wav = float32ToWav(chunk, sampleRate)
-          const text = await sendWavToTranscribe(wav, `segment_${i}.wav`)
-          if (text !== null && text.trim()) texts.push(text.trim())
+          const texts: string[] = [];
+          for (
+            let i = 0, start = 0;
+            start < channelData.length;
+            i++, start += MAX_SAMPLES
+          ) {
+            const chunk = channelData.slice(
+              start,
+              Math.min(start + MAX_SAMPLES, channelData.length),
+            );
+            const wav = float32ToWav(chunk, sampleRate);
+            const text = await sendWavToTranscribe(wav, `segment_${i}.wav`);
+            if (text !== null && text.trim()) texts.push(text.trim());
+          }
+
+          if (texts.length === 0) {
+            setRecordingError(
+              "文字起こしに失敗しました。対応形式: m4a / mp3 / mp4 / ogg / wav / flac / webm",
+            );
+            return textRef.current;
+          }
+          audioUploadPromiseRef.current = uploadAudioToServer(
+            file,
+            file.type || "audio/webm",
+          );
+          return appendTranscription(texts.join("\n"));
+        } catch (e) {
+          console.error("[transcribeFile large]", e);
+          setRecordingError(
+            "音声のデコードに失敗しました。別の形式でお試しください。",
+          );
+          return textRef.current;
+        } finally {
+          setIsTranscribing(false);
         }
-
-        if (texts.length === 0) {
-          setRecordingError('文字起こしに失敗しました。対応形式: m4a / mp3 / mp4 / ogg / wav / flac / webm')
-          return textRef.current
-        }
-        audioUploadPromiseRef.current = uploadAudioToServer(file, file.type || 'audio/webm')
-        return appendTranscription(texts.join('\n'))
-      } catch (e) {
-        console.error('[transcribeFile large]', e)
-        setRecordingError('音声のデコードに失敗しました。別の形式でお試しください。')
-        return textRef.current
-      } finally {
-        setIsTranscribing(false)
       }
-    }
 
-    // ── 通常サイズ（24MB以下）：既存パス ──────────────────────────────────────
-    const filename = file instanceof File ? file.name : undefined
-    const transcribed = await callWhisper(file, filename)
-    if (transcribed === null) {
-      setRecordingError('文字起こしに失敗しました。対応形式: m4a / mp3 / mp4 / ogg / wav / flac / webm')
-      return textRef.current
-    }
-    if (transcribed === '') {
-      setRecordingError('音声が検出されませんでした。音声が含まれているファイルをご確認ください。')
-      return textRef.current
-    }
-    const mimeType = file.type || 'audio/webm'
-    audioUploadPromiseRef.current = uploadAudioToServer(file, mimeType)
-    return appendTranscription(transcribed)
-  }, [callWhisper, appendTranscription, uploadAudioToServer])
+      // ── 通常サイズ（24MB以下）：既存パス ──────────────────────────────────────
+      const filename = file instanceof File ? file.name : undefined;
+      const transcribed = await callWhisper(file, filename);
+      if (transcribed === null) {
+        setRecordingError(
+          "文字起こしに失敗しました。対応形式: m4a / mp3 / mp4 / ogg / wav / flac / webm",
+        );
+        return textRef.current;
+      }
+      if (transcribed === "") {
+        setRecordingError(
+          "音声が検出されませんでした。音声が含まれているファイルをご確認ください。",
+        );
+        return textRef.current;
+      }
+      const mimeType = file.type || "audio/webm";
+      audioUploadPromiseRef.current = uploadAudioToServer(file, mimeType);
+      return appendTranscription(transcribed);
+    },
+    [callWhisper, appendTranscription, uploadAudioToServer],
+  );
 
   // 音声 blob を文字起こしして生テキストを返す（text state は変更しない）
-  const transcribeBlob = useCallback(async (blob: Blob): Promise<string> => {
-    const transcribed = await callWhisper(blob)
-    return transcribed ?? ''
-  }, [callWhisper])
+  const transcribeBlob = useCallback(
+    async (blob: Blob): Promise<string> => {
+      const transcribed = await callWhisper(blob);
+      return transcribed ?? "";
+    },
+    [callWhisper],
+  );
 
   // 録音失敗時に保存された音声を再度文字起こし
   const retryTranscription = useCallback(async (): Promise<string> => {
-    if (!pendingAudio) return textRef.current
-    const transcribed = await callWithBackoff(() => callWhisper(pendingAudio))
+    if (!pendingAudio) return textRef.current;
+    const transcribed = await callWithBackoff(() => callWhisper(pendingAudio));
     if (transcribed === null) {
-      setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
-      return textRef.current
+      setRecordingError("文字起こしに失敗しました。もう一度お試しください。");
+      return textRef.current;
     }
-    if (transcribed === '') {
-      setRecordingError('音声が検出されませんでした。録音音声に音声データが含まれていない可能性があります。')
-      return textRef.current
+    if (transcribed === "") {
+      setRecordingError(
+        "音声が検出されませんでした。録音音声に音声データが含まれていない可能性があります。",
+      );
+      return textRef.current;
     }
-    const audioToUpload = pendingAudio
-    setPendingAudio(null)
+    const audioToUpload = pendingAudio;
+    setPendingAudio(null);
     // 自動アップロードが既に成功済みの場合は上書きしない（アップロード競合を防ぐ）
-    const existingPath = await audioUploadPromiseRef.current
+    const existingPath = await audioUploadPromiseRef.current;
     if (!existingPath) {
-      audioUploadPromiseRef.current = uploadAudioToServer(audioToUpload, audioToUpload.type || 'audio/webm')
+      audioUploadPromiseRef.current = uploadAudioToServer(
+        audioToUpload,
+        audioToUpload.type || "audio/webm",
+      );
     }
-    return appendTranscription(transcribed)
-  }, [pendingAudio, callWhisper, appendTranscription, uploadAudioToServer])
+    return appendTranscription(transcribed);
+  }, [pendingAudio, callWhisper, appendTranscription, uploadAudioToServer]);
 
   // 停止済み録音（downloadableAudio）を文字起こしする（手動アップロード後に呼ぶ）
   const transcribeRecording = useCallback(async (): Promise<string> => {
-    const blob = downloadableAudio
-    if (!blob) return textRef.current
+    const blob = downloadableAudio;
+    if (!blob) return textRef.current;
 
-    const chunks = chunksRef.current
-    const mimeType = blob.type || 'audio/webm'
+    const chunks = chunksRef.current;
+    const mimeType = blob.type || "audio/webm";
 
-    let result: string | null
+    let result: string | null;
 
     if (chunks.length > 0) {
       // 録音直後でチャンクがメモリにある場合：チャンク分割対応で送信
-      const { result: r } = await transcribeChunks(chunks, mimeType, callWhisper)
-      result = r
+      const { result: r } = await transcribeChunks(
+        chunks,
+        mimeType,
+        callWhisper,
+      );
+      result = r;
     } else {
       // リロード後などチャンクが消えた場合：フルblobを直接送信（25MB未満なら動作）
-      result = await callWithBackoff(() => callWhisper(blob))
+      result = await callWithBackoff(() => callWhisper(blob));
     }
 
     if (result === null) {
-      setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
-      return textRef.current
+      setRecordingError("文字起こしに失敗しました。もう一度お試しください。");
+      return textRef.current;
     }
-    if (result === '') {
-      setRecordingError('音声が検出されませんでした。画面をオンのままにしてください。')
-      return textRef.current
+    if (result === "") {
+      setRecordingError(
+        "音声が検出されませんでした。画面をオンのままにしてください。",
+      );
+      return textRef.current;
     }
 
-    chunksRef.current = []
-    return appendTranscription(result)
-  }, [downloadableAudio, callWhisper, appendTranscription])
+    chunksRef.current = [];
+    return appendTranscription(result);
+  }, [downloadableAudio, callWhisper, appendTranscription]);
 
   // リロードで中断された録音をIndexedDBから復元して文字起こし
   const recoverAndTranscribe = useCallback(async (): Promise<string> => {
-    const data = await getRecoveryData()
-    if (!data) return textRef.current
+    const data = await getRecoveryData();
+    if (!data) return textRef.current;
 
     const { result, failedGroupBlob, fullBlob } = await transcribeChunks(
-      data.chunks, data.mimeType, callWhisper
-    )
+      data.chunks,
+      data.mimeType,
+      callWhisper,
+    );
 
     if (result === null) {
-      setDownloadableAudio(fullBlob)
-      setPendingAudio(failedGroupBlob ?? fullBlob)
-      setRecordingError('文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。')
-      return textRef.current
+      setDownloadableAudio(fullBlob);
+      setPendingAudio(failedGroupBlob ?? fullBlob);
+      setRecordingError(
+        "文字起こしに失敗しました。オンラインに戻ってから「録音済み音声を文字起こし」を押してください。",
+      );
+      return textRef.current;
     }
 
-    await clearRecoveryDB()
-    setHasPendingRecovery(false)
+    await clearRecoveryDB();
+    setHasPendingRecovery(false);
 
-    if (result === '') {
-      setRecordingError('音声が検出されませんでした。')
-      return textRef.current
+    if (result === "") {
+      setRecordingError("音声が検出されませんでした。");
+      return textRef.current;
     }
 
-    setDownloadableAudio(fullBlob)
-    audioUploadPromiseRef.current = uploadAudioToServer(fullBlob, data.mimeType)
-    return appendTranscription(result)
-  }, [callWhisper, appendTranscription, uploadAudioToServer])
+    setDownloadableAudio(fullBlob);
+    audioUploadPromiseRef.current = uploadAudioToServer(
+      fullBlob,
+      data.mimeType,
+    );
+    return appendTranscription(result);
+  }, [callWhisper, appendTranscription, uploadAudioToServer]);
 
   const getRecoveryBlob = useCallback(async (): Promise<Blob | null> => {
-    const data = await getRecoveryData()
-    if (!data || data.chunks.length === 0) return null
-    return new Blob(data.chunks, { type: data.mimeType })
-  }, [])
+    const data = await getRecoveryData();
+    if (!data || data.chunks.length === 0) return null;
+    return new Blob(data.chunks, { type: data.mimeType });
+  }, []);
 
   const discardRecovery = useCallback(() => {
-    clearRecoveryDB()
-    setHasPendingRecovery(false)
-    localStorage.removeItem('pipeline_pending')
-  }, [])
+    clearRecoveryDB();
+    setHasPendingRecovery(false);
+    localStorage.removeItem("pipeline_pending");
+  }, []);
 
   const downloadAudio = useCallback(async () => {
-    if (!downloadableAudio) return
-    const ext = getExtFromMime(downloadableAudio.type)
-    const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+    if (!downloadableAudio) return;
+    const ext = getExtFromMime(downloadableAudio.type);
+    const ts = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
 
     if (isIOS) {
       // IndexedDB から復元した大容量 Blob は iOS Safari で Web Share API / blob URL に直接使えない
       // FileReader でメモリ上に読み込み直して新しいインメモリ Blob を作成してから使用する
-      let blobToUse: Blob
+      let blobToUse: Blob;
       try {
-        const buffer = await readAsArrayBuffer(downloadableAudio)
-        blobToUse = new Blob([buffer], { type: downloadableAudio.type || 'audio/mp4' })
+        const buffer = await readAsArrayBuffer(downloadableAudio);
+        blobToUse = new Blob([buffer], {
+          type: downloadableAudio.type || "audio/mp4",
+        });
       } catch (e) {
         // FileReader 失敗 = データにアクセスできない
-        throw new Error(`音声データの読み込みに失敗しました (${(e as Error).message || 'FileReader error'})`)
+        throw new Error(
+          `音声データの読み込みに失敗しました (${(e as Error).message || "FileReader error"})`,
+        );
       }
 
       if (blobToUse.size === 0) {
-        throw new Error(`音声データが空です (元のサイズ: ${downloadableAudio.size} bytes)`)
+        throw new Error(
+          `音声データが空です (元のサイズ: ${downloadableAudio.size} bytes)`,
+        );
       }
 
-      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function"
+      ) {
         const file = new File([blobToUse], `recording_${ts}.${ext}`, {
-          type: blobToUse.type || 'audio/mp4',
-        })
+          type: blobToUse.type || "audio/mp4",
+        });
         if (navigator.canShare({ files: [file] })) {
           try {
-            await navigator.share({ files: [file] })
-            return
+            await navigator.share({ files: [file] });
+            return;
           } catch (e) {
-            if ((e as Error).name === 'AbortError') return  // ユーザーがキャンセル
+            if ((e as Error).name === "AbortError") return; // ユーザーがキャンセル
             // Web Share 失敗: blob URL にフォールバック
           }
         }
       }
       // Web Share API 非対応 or ファイル共有不可の場合: インメモリ blob の blob URL にフォールバック
-      const url = URL.createObjectURL(blobToUse)
-      const a = document.createElement('a')
-      a.href = url
-      a.target = '_blank'
-      a.rel = 'noopener'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 60000)
-      return
+      const url = URL.createObjectURL(blobToUse);
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return;
     }
 
     // 非 iOS
-    const url = URL.createObjectURL(downloadableAudio)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `recording_${ts}.${ext}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 60000)
-  }, [downloadableAudio])
+    const url = URL.createObjectURL(downloadableAudio);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `recording_${ts}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }, [downloadableAudio]);
 
   const clearPendingAudio = useCallback(() => {
-    setPendingAudio(null)
-  }, [])
+    setPendingAudio(null);
+  }, []);
 
   // pendingAudioの音声をサーバーへアップロード（オンライン復帰時の再試行用）
   const retryAudioUpload = useCallback(async (): Promise<boolean> => {
-    const blob = downloadableAudio
-    if (!blob) return false
-    const path = await uploadAudioToServer(blob, blob.type || 'audio/webm')
+    const blob = downloadableAudio;
+    if (!blob) return false;
+    const path = await uploadAudioToServer(blob, blob.type || "audio/webm");
     if (path) {
-      audioUploadPromiseRef.current = Promise.resolve(path)
-      return true
+      audioUploadPromiseRef.current = Promise.resolve(path);
+      return true;
     }
-    return false
-  }, [downloadableAudio, uploadAudioToServer])
+    return false;
+  }, [downloadableAudio, uploadAudioToServer]);
 
-  const transcribeByPath = useCallback(async (audioPath: string): Promise<string> => {
-    setIsTranscribing(true)
-    try {
-      // ジョブを開始（即時レスポンス）
-      const startRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/transcribe-by-path`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ audio_path: audioPath }),
-      })
-      if (!startRes.ok) {
-        const errText = await startRes.text().catch(() => '')
-        console.error(`[/api/transcribe-by-path] HTTP ${startRes.status}: ${errText}`)
-        setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
-        return textRef.current
-      }
-      const { job_id } = await startRes.json()
-
-      // 3秒ごとにジョブ状態をポーリング（iOS Safariタイムアウト回避）
-      while (true) {
-        await new Promise(r => setTimeout(r, 3000))
-        const pollRes = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe-job/${job_id}`,
-          { headers: authHeaders() }
-        )
-        if (!pollRes.ok) {
-          console.error(`[/api/transcribe-job] HTTP ${pollRes.status}`)
-          setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
-          return textRef.current
+  const transcribeByPath = useCallback(
+    async (audioPath: string): Promise<string> => {
+      setIsTranscribing(true);
+      try {
+        // ジョブを開始（即時レスポンス）
+        const startRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe-by-path`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeaders() },
+            body: JSON.stringify({ audio_path: audioPath }),
+          },
+        );
+        if (!startRes.ok) {
+          const errText = await startRes.text().catch(() => "");
+          console.error(
+            `[/api/transcribe-by-path] HTTP ${startRes.status}: ${errText}`,
+          );
+          setRecordingError(
+            "文字起こしに失敗しました。もう一度お試しください。",
+          );
+          return textRef.current;
         }
-        const data = await pollRes.json()
-        if (data.status === 'done') {
-          const transcribed: string = data.text || ''
-          if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
-            setRecordingError('音声が検出されませんでした。')
-            return textRef.current
+        const { job_id } = await startRes.json();
+
+        // 3秒ごとにジョブ状態をポーリング（iOS Safariタイムアウト回避）
+        while (true) {
+          await new Promise((r) => setTimeout(r, 3000));
+          const pollRes = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe-job/${job_id}`,
+            { headers: authHeaders() },
+          );
+          if (!pollRes.ok) {
+            console.error(`[/api/transcribe-job] HTTP ${pollRes.status}`);
+            setRecordingError(
+              "文字起こしに失敗しました。もう一度お試しください。",
+            );
+            return textRef.current;
           }
-          return appendTranscription(transcribed)
+          const data = await pollRes.json();
+          if (data.status === "done") {
+            const transcribed: string = data.text || "";
+            if (
+              transcribed.trim().length === 0 ||
+              isHallucination(transcribed)
+            ) {
+              setRecordingError("音声が検出されませんでした。");
+              return textRef.current;
+            }
+            return appendTranscription(transcribed);
+          }
+          if (data.status === "failed") {
+            console.error(`[/api/transcribe-job] failed: ${data.error}`);
+            setRecordingError(
+              "文字起こしに失敗しました。もう一度お試しください。",
+            );
+            return textRef.current;
+          }
+          // status === 'processing' → 次のポーリングへ
         }
-        if (data.status === 'failed') {
-          console.error(`[/api/transcribe-job] failed: ${data.error}`)
-          setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
-          return textRef.current
-        }
-        // status === 'processing' → 次のポーリングへ
+      } catch {
+        setRecordingError("文字起こしに失敗しました。もう一度お試しください。");
+        return textRef.current;
+      } finally {
+        setIsTranscribing(false);
       }
-    } catch {
-      setRecordingError('文字起こしに失敗しました。もう一度お試しください。')
-      return textRef.current
-    } finally {
-      setIsTranscribing(false)
-    }
-  }, [appendTranscription])
+    },
+    [appendTranscription],
+  );
 
   const clearRecording = useCallback(() => {
-    setText('')
-    localStorage.removeItem(DRAFT_KEY)
-    localStorage.removeItem('pipeline_pending')
-    localStorage.removeItem('pipeline_text')
-    chunksRef.current = []
-    setPendingAudio(null)
-    setDownloadableAudio(null)
-  }, [])
+    setText("");
+    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem("pipeline_pending");
+    localStorage.removeItem("pipeline_text");
+    chunksRef.current = [];
+    setPendingAudio(null);
+    setDownloadableAudio(null);
+  }, []);
 
   return (
-    <RecordingContext.Provider value={{
-      isRecording,
-      isPaused,
-      isTranscribing,
-      text,
-      setText,
-      recordingError,
-      setRecordingError,
-      pendingAudio,
-      downloadableAudio,
-      hasPendingRecovery,
-      startRecording,
-      stopRecording,
-      pauseRecording,
-      resumeRecording,
-      transcribeFile,
-      transcribeBlob,
-      transcribeRecording,
-      retryTranscription,
-      recoverAndTranscribe,
-      getRecoveryBlob,
-      discardRecovery,
-      downloadAudio,
-      clearPendingAudio,
-      clearRecording,
-      transcribeByPath,
-      getAudioUploadPromise: () => audioUploadPromiseRef.current,
-      retryAudioUpload,
-    }}>
+    <RecordingContext.Provider
+      value={{
+        isRecording,
+        isPaused,
+        isTranscribing,
+        text,
+        setText,
+        recordingError,
+        setRecordingError,
+        pendingAudio,
+        downloadableAudio,
+        hasPendingRecovery,
+        startRecording,
+        stopRecording,
+        pauseRecording,
+        resumeRecording,
+        transcribeFile,
+        transcribeBlob,
+        transcribeRecording,
+        retryTranscription,
+        recoverAndTranscribe,
+        getRecoveryBlob,
+        discardRecovery,
+        downloadAudio,
+        clearPendingAudio,
+        clearRecording,
+        transcribeByPath,
+        getAudioUploadPromise: () => audioUploadPromiseRef.current,
+        retryAudioUpload,
+      }}
+    >
       {children}
     </RecordingContext.Provider>
-  )
+  );
 }
 
 export function useRecording() {
-  const ctx = useContext(RecordingContext)
-  if (!ctx) throw new Error('useRecording must be used within RecordingProvider')
-  return ctx
+  const ctx = useContext(RecordingContext);
+  if (!ctx)
+    throw new Error("useRecording must be used within RecordingProvider");
+  return ctx;
 }
