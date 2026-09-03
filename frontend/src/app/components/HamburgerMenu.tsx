@@ -96,7 +96,7 @@ export default function HamburgerMenu() {
             設定
           </Link>
           <a
-            href="https://lp.ai-nintei-assistant.com"
+            href="https://ai-nintei-assistant.com"
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setOpen(false)}
