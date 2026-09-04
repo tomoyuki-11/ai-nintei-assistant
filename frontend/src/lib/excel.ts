@@ -136,17 +136,10 @@ function parseResult(text: string): ExcelRow[] {
         itemName = knownName;
         content = afterNumber.slice(knownName.length).trim();
       } else {
-        // 項目名の略称が使われた場合：**か全角スペース以降を判定として抽出
+        // 項目名の略称が使われた場合：全角スペース以降を判定として抽出
         itemName = knownName;
-        const boldIdx = afterNumber.indexOf('**');
         const spaceIdx = afterNumber.indexOf('　');
-        if (boldIdx >= 0) {
-          content = afterNumber.slice(boldIdx);
-        } else if (spaceIdx >= 0) {
-          content = afterNumber.slice(spaceIdx + 1);
-        } else {
-          content = afterNumber;
-        }
+        content = spaceIdx >= 0 ? afterNumber.slice(spaceIdx + 1) : afterNumber;
       }
     } else {
       const colonMatch = afterNumber.match(/^([^：:]+)[：:](.+)$/);
