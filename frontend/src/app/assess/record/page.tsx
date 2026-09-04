@@ -360,7 +360,7 @@ useEffect(() => {
       {/* 文字起こし・生成中オーバーレイ */}
       {isBusy && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-200/80 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl px-8 py-8 mx-6 max-w-xs w-full flex flex-col items-center gap-5">
+          <div className={`rounded-2xl shadow-xl px-8 py-8 mx-6 max-w-xs w-full flex flex-col items-center gap-5 ${isTranscribing ? 'bg-green-50' : 'bg-purple-50'}`}>
             <div className="w-12 h-12 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin" />
             <div className="text-center">
               <p className="text-base font-semibold text-gray-900">
