@@ -190,6 +190,7 @@ export async function downloadExcel(
     excelRow.eachCell((cell, colNum) => {
       cell.alignment = {
         vertical: "top",
+        horizontal: "left",
         wrapText: colNum === 4,
       };
     });
