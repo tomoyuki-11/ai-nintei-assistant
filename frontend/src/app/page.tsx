@@ -279,7 +279,7 @@ export default function HomePage() {
                     </div>
                   )}
 
-                  {/* 音声ダウンロード */}
+                  {/* 音声ダウンロード（一時非表示）
                   {item.audio_path && (
                     <div className={`px-4 py-3${item.formatted ? ' border-t border-gray-100' : ''}`}>
                       {downloadConfirmId === item.id ? (
@@ -304,6 +304,25 @@ export default function HomePage() {
                           className="rounded-lg bg-gray-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-gray-700 transition-colors"
                         >音声をダウンロード</button>
                       )}
+                    </div>
+                  )}
+                  */}
+
+                  {/* 文字起こしダウンロード */}
+                  {item.text && (
+                    <div className={`px-4 py-3${item.formatted || item.audio_path ? ' border-t border-gray-100' : ''}`}>
+                      <button
+                        onClick={() => {
+                          const blob = new Blob([item.text!], { type: 'text/plain' })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = `文字起こし_${formatDate(item.created_at)}.txt`
+                          a.click()
+                          URL.revokeObjectURL(url)
+                        }}
+                        className="rounded-lg bg-gray-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-gray-700 transition-colors"
+                      >文字起こしダウンロード</button>
                     </div>
                   )}
                 </div>

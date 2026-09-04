@@ -261,6 +261,22 @@ export default function HistoryPage() {
                   </div>
                 </div>
 
+                {/* 文字起こしダウンロード */}
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([item.text], { type: 'text/plain' })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `文字起こし_${formatDate(item.created_at)}.txt`
+                      a.click()
+                      URL.revokeObjectURL(url)
+                    }}
+                    className="rounded-lg bg-gray-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-gray-700 transition-colors"
+                  >文字起こしダウンロード</button>
+                </div>
+
                 {/* 文字起こし */}
                 <div className="px-4 py-3 border-b border-gray-100">
                   <p className="text-xs font-medium text-gray-400 mb-1">文字起こし</p>

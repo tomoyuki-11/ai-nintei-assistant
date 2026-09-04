@@ -505,11 +505,13 @@ useEffect(() => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-semibold text-gray-900">整形結果</h2>
               <div className="flex items-center gap-2">
+                {/* 音声ダウンロード（一時非表示）
                 {downloadableAudio && (
                   <button onClick={downloadAudio} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors">
                     音声DL (.{getExtFromMime(downloadableAudio.type)})
                   </button>
                 )}
+                */}
                 <button onClick={() => downloadExcel(result)} className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white font-medium hover:bg-green-700 transition-colors">
                   Excelをダウンロード
                 </button>
@@ -587,12 +589,14 @@ useEffect(() => {
 
                     {/* サブアクション */}
                     <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
+                      {/* 音声ダウンロード（一時非表示）
                       <button onClick={async () => {
                         try { await downloadAudio() }
                         catch (e) { setError(`ダウンロード失敗: ${e instanceof Error ? e.message : String(e)}`) }
                       }} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
                         音声をダウンロード (.{getExtFromMime(downloadableAudio.type)}) [{(downloadableAudio.size / 1024 / 1024).toFixed(1)}MB]
                       </button>
+                      */}
                       <button onClick={() => setShowDiscardModal(true)} className="ml-auto text-xs text-gray-400 hover:text-red-500 transition-colors">
                         破棄
                       </button>
