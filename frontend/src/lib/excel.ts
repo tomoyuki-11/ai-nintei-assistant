@@ -64,6 +64,7 @@ const ITEM_NAMES: Record<string, string> = {
 }
 
 function parseContent(content: string): [string, string] {
+  content = content.replace(/\*\*/g, '')
   // 「判定：〇〇」形式（701/702など）
   const withJudgment = content.match(/^(.*?)\s*判定[：:](.+)$/)
   if (withJudgment) {
