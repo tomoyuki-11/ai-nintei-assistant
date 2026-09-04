@@ -43,6 +43,7 @@ const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
   const [isOnline, setIsOnline] = useState(() => typeof window !== 'undefined' ? navigator.onLine : true)
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'failed'>('idle')
   const [showDiscardModal, setShowDiscardModal] = useState(false)
+  const [transcriptionProgress, setTranscriptionProgress] = useState(0)
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
@@ -154,6 +155,14 @@ useEffect(() => {
     const t = setTimeout(() => setError(''), 8000)
     return () => clearTimeout(t)
   }, [error])
+
+  useEffect(() => {
+    if (!isTranscribing) { setTranscriptionProgress(0); return }
+    const id = setInterval(() => {
+      setTranscriptionProgress(prev => prev >= 89 ? prev : prev + (89 - prev) * 0.04)
+    }, 400)
+    return () => clearInterval(id)
+  }, [isTranscribing])
 
   function timeParts(s: number) {
     return {
@@ -360,14 +369,61 @@ useEffect(() => {
       {/* 文字起こし・生成中オーバーレイ */}
       {isBusy && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-200/80 backdrop-blur-sm">
+          <style>{`
+            @keyframes metronome {
+              0%, 100% { transform: rotate(-10deg); }
+              50% { transform: rotate(10deg); }
+            }
+          `}</style>
           <div className={`rounded-2xl shadow-xl px-8 py-8 mx-6 max-w-xs w-full flex flex-col items-center gap-5 ${isTranscribing ? 'bg-green-50' : 'bg-purple-50'}`}>
-            <div className="w-12 h-12 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin" />
-            <div className="text-center">
-              <p className="text-base font-semibold text-gray-900">
-                AI {isTranscribing ? '文字起こし' : '生成'}中です
-              </p>
-              <p className="text-xs text-gray-400 mt-1">しばらくお待ちください...</p>
-            </div>
+            {isTranscribing ? (
+              <>
+                <p className="text-base font-semibold text-gray-900 self-start">文字起こし中</p>
+                <div className="w-full">
+                  <div className="relative w-full mt-12">
+                    {/* 鉛筆アイコン */}
+                    <div
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: `${transcriptionProgress}%`,
+                        bottom: '100%',
+                        transform: 'translateX(-50%)',
+                        paddingBottom: '1px',
+                      }}
+                    >
+                      <div style={{ animation: 'metronome 0.5s ease-in-out infinite', transformOrigin: 'bottom center' }}>
+                        <svg width="16" height="38" viewBox="0 0 16 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="3" y="0" width="10" height="2" rx="1" fill="#6B7280"/>
+                          <rect x="3" y="2" width="10" height="5" fill="#FCA5A5"/>
+                          <rect x="3" y="7" width="10" height="2" fill="#9CA3AF"/>
+                          <rect x="3" y="9" width="10" height="20" fill="#2563EB"/>
+                          <polygon points="3,29 13,29 10,35 6,35" fill="#D4A574"/>
+                          <polygon points="6,35 10,35 8,38" fill="#1F2937"/>
+                        </svg>
+                      </div>
+                    </div>
+                    {/* プログレスバー */}
+                    <div className="w-full h-6 bg-white border-2 border-blue-300 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-400 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${transcriptionProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-center text-sm font-semibold text-gray-600 mt-2">
+                    {Math.round(transcriptionProgress)}%
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-12 h-12 rounded-full border-4 border-purple-100 border-t-purple-500 animate-spin" />
+                <div className="text-center">
+                  <p className="text-base font-semibold text-gray-900">AI 生成中です</p>
+                  <p className="text-xs text-gray-400 mt-1">しばらくお待ちください...</p>
+                </div>
+              </>
+            )}
             <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-center">
               <p className="text-xs font-semibold text-amber-800">生成が完了するまでページを離れないでください</p>
               <p className="text-xs text-amber-600 mt-0.5">データが失われる可能性があります</p>
