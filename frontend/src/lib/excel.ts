@@ -173,7 +173,15 @@ export function downloadExcel(
   const rows = parseResult(formattedText);
   const ws = utils.aoa_to_sheet(rows);
 
-  ws["!cols"] = [{ wch: 6 }, { wch: 40 }, { wch: 28 }, { wch: 60 }];
+  ws["!cols"] = [{ wch: 6 }, { wch: 40 }, { wch: 28 }, { wch: 100 }];
+
+  // D列（特記事項）の全セルに折り返しスタイルを適用
+  const range = utils.decode_range(ws["!ref"] ?? "A1")
+  for (let row = range.s.r; row <= range.e.r; row++) {
+    const addr = utils.encode_cell({ r: row, c: 3 })
+    if (!ws[addr]) continue
+    ws[addr].s = { alignment: { wrapText: true } }
+  }
 
   const wb = utils.book_new();
   utils.book_append_sheet(wb, ws, "認定調査");
