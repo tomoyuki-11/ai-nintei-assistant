@@ -12,6 +12,8 @@ import MarkdownText from '../../components/MarkdownText'
 
 const inter = Inter({ subsets: ['latin'], weight: ['700'], variable: '--font-inter' })
 
+const WAVE_BAR_HEIGHTS = [0.6, 0.3, 0.85, 0.5, 1.0, 0.4, 0.9, 0.65, 0.3, 0.8, 0.5, 1.0, 0.55, 0.4, 0.95, 0.7, 0.3, 0.75, 0.5, 0.9, 0.35, 0.8, 0.6, 0.25]
+
 export default function RecordPage() {
   const router = useRouter()
   const {
@@ -43,6 +45,7 @@ const [limitPlan, setLimitPlan] = useState<LimitPlan | null>(null)
   const [isOnline, setIsOnline] = useState(() => typeof window !== 'undefined' ? navigator.onLine : true)
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'failed'>('idle')
   const [showDiscardModal, setShowDiscardModal] = useState(false)
+  const [waveBarCount, setWaveBarCount] = useState(0)
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/start'); return }
@@ -154,6 +157,15 @@ useEffect(() => {
     const t = setTimeout(() => setError(''), 8000)
     return () => clearTimeout(t)
   }, [error])
+
+  useEffect(() => {
+    if (!isTranscribing) { setWaveBarCount(0); return }
+    setWaveBarCount(0)
+    const id = setInterval(() => {
+      setWaveBarCount(prev => prev >= WAVE_BAR_HEIGHTS.length ? 0 : prev + 1)
+    }, 150)
+    return () => clearInterval(id)
+  }, [isTranscribing])
 
   function timeParts(s: number) {
     return {
@@ -361,29 +373,24 @@ useEffect(() => {
       {isBusy && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-200/80 backdrop-blur-sm">
           <style>{`
-            @keyframes waveform-bar {
-              0%, 100% { transform: scaleY(0.08); }
-              3.5% { transform: scaleY(var(--bar-h)); }
-              7% { transform: scaleY(0.08); }
+            @keyframes bar-pop {
+              from { transform: scaleY(0); }
+              to { transform: scaleY(1); }
             }
           `}</style>
           <div className={`rounded-2xl shadow-xl px-8 py-8 mx-6 max-w-xs w-full flex flex-col items-center gap-5 ${isTranscribing ? 'bg-green-50' : 'bg-purple-50'}`}>
             {isTranscribing ? (
               <>
-                <div className="flex items-center justify-center gap-0.5" style={{ height: '56px' }}>
-                  {[0.1,0.15,0.2,0.35,0.5,0.7,0.9,1.0,0.8,0.6,0.9,1.0,0.7,0.5,0.85,1.0,0.9,0.75,0.6,0.8,0.5,0.35,0.2,0.1].map((h, i) => (
+                <div className="flex items-end justify-center gap-0.5" style={{ height: '56px' }}>
+                  {WAVE_BAR_HEIGHTS.slice(0, waveBarCount).map((h, i) => (
                     <div
                       key={i}
                       style={{
                         width: '3px',
-                        height: '100%',
+                        height: `${h * 56}px`,
                         borderRadius: '2px',
                         backgroundColor: '#059669',
-                        transformOrigin: 'center',
-                        transform: 'scaleY(0.08)',
-                        ['--bar-h' as string]: h,
-                        animation: 'waveform-bar 2.4s linear infinite',
-                        animationDelay: `${i * 100}ms`,
+                        animation: 'bar-pop 0.1s ease-out both',
                       }}
                     />
                   ))}
