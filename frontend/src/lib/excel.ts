@@ -183,7 +183,6 @@ export async function downloadExcel(
     // A列の番号を数値型に変換（ヘッダー行と「概況」行は文字列のまま）
     const rowData = i === 0 ? row : [Number(row[0]) || row[0], row[1], row[2], row[3]]
     const excelRow = worksheet.addRow(rowData);
-    excelRow.height = 5.25  // 7px相当
     if (i === 0) {
       excelRow.font = { bold: true };
     }
