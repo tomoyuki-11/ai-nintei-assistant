@@ -169,7 +169,7 @@ export function downloadExcel(formattedText: string, filename = '認定調査_�
 
   ws['!cols'] = [
     { wch: 6 },
-    { wch: 24 },
+    { wch: 37 },
     { wch: 28 },
     { wch: 60 },
   ]
