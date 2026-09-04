@@ -313,7 +313,8 @@ export default function HomePage() {
                     <div className={`px-4 py-3${item.formatted || item.audio_path ? ' border-t border-gray-100' : ''}`}>
                       <button
                         onClick={() => {
-                          const blob = new Blob([item.text!], { type: 'text/plain' })
+                          const bom = new Uint8Array([0xEF, 0xBB, 0xBF])
+                          const blob = new Blob([bom, item.text!], { type: 'text/plain;charset=utf-8' })
                           const url = URL.createObjectURL(blob)
                           const a = document.createElement('a')
                           a.href = url

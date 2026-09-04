@@ -265,7 +265,8 @@ export default function HistoryPage() {
                 <div className="px-4 py-3 border-b border-gray-100">
                   <button
                     onClick={() => {
-                      const blob = new Blob([item.text], { type: 'text/plain' })
+                      const bom = new Uint8Array([0xEF, 0xBB, 0xBF])
+                      const blob = new Blob([bom, item.text], { type: 'text/plain;charset=utf-8' })
                       const url = URL.createObjectURL(blob)
                       const a = document.createElement('a')
                       a.href = url
