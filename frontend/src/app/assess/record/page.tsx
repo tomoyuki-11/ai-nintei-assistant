@@ -360,14 +360,48 @@ useEffect(() => {
       {/* 文字起こし・生成中オーバーレイ */}
       {isBusy && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-200/80 backdrop-blur-sm">
+          <style>{`
+            @keyframes waveform-bar {
+              0%, 100% { transform: scaleY(0.08); }
+              3.5% { transform: scaleY(var(--bar-h)); }
+              7% { transform: scaleY(0.08); }
+            }
+          `}</style>
           <div className={`rounded-2xl shadow-xl px-8 py-8 mx-6 max-w-xs w-full flex flex-col items-center gap-5 ${isTranscribing ? 'bg-green-50' : 'bg-purple-50'}`}>
-            <div className="w-12 h-12 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin" />
-            <div className="text-center">
-              <p className="text-base font-semibold text-gray-900">
-                AI {isTranscribing ? '文字起こし' : '生成'}中です
-              </p>
-              <p className="text-xs text-gray-400 mt-1">しばらくお待ちください...</p>
-            </div>
+            {isTranscribing ? (
+              <>
+                <div className="flex items-center justify-center gap-0.5" style={{ height: '56px' }}>
+                  {[0.1,0.15,0.2,0.35,0.5,0.7,0.9,1.0,0.8,0.6,0.9,1.0,0.7,0.5,0.85,1.0,0.9,0.75,0.6,0.8,0.5,0.35,0.2,0.1].map((h, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        width: '3px',
+                        height: '100%',
+                        borderRadius: '2px',
+                        backgroundColor: '#059669',
+                        transformOrigin: 'center',
+                        transform: 'scaleY(0.08)',
+                        ['--bar-h' as string]: h,
+                        animation: 'waveform-bar 2.4s linear infinite',
+                        animationDelay: `${i * 100}ms`,
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="text-center">
+                  <p className="text-base font-semibold text-gray-900">文字起こし中です</p>
+                  <p className="text-xs text-gray-400 mt-1">しばらくお待ちください...</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-12 h-12 rounded-full border-4 border-purple-100 border-t-purple-500 animate-spin" />
+                <div className="text-center">
+                  <p className="text-base font-semibold text-gray-900">AI 生成中です</p>
+                  <p className="text-xs text-gray-400 mt-1">しばらくお待ちください...</p>
+                </div>
+              </>
+            )}
             <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-center">
               <p className="text-xs font-semibold text-amber-800">生成が完了するまでページを離れないでください</p>
               <p className="text-xs text-amber-600 mt-0.5">データが失われる可能性があります</p>
