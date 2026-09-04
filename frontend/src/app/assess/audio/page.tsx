@@ -143,7 +143,7 @@ export default function AudioPage() {
     if (cancelledRef.current) return
     if (!transcribedText.trim()) return
 
-    // Step 3: Claude API で整形
+    // Step 3: Claude API で生成
     setIsFormatting(true)
     const controller = new AbortController()
     abortControllerRef.current = controller
@@ -174,7 +174,7 @@ export default function AudioPage() {
       const msg = e instanceof Error ? e.message : ''
       setError(msg === 'Load failed' || msg === 'Failed to fetch'
         ? 'ネットワークエラーが発生しました。インターネット接続を確認してください。'
-        : msg || '整形に失敗しました'
+        : msg || '生成に失敗しました'
       )
     } finally {
       setIsFormatting(false)
@@ -215,7 +215,7 @@ export default function AudioPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
             <p className="text-sm font-semibold text-gray-900 mb-2">
-              {isUploading ? 'アップロード' : isTranscribing ? '文字起こし' : '整形'}をキャンセルしました
+              {isUploading ? 'アップロード' : isTranscribing ? '文字起こし' : '生成'}をキャンセルしました
             </p>
             <p className="text-xs text-gray-500 mb-5">もう一度実行する場合はファイルを選択し直してください。</p>
             <button onClick={handleCancelConfirm} className="w-full rounded-lg bg-gray-700 px-4 py-2 text-sm text-white font-medium hover:bg-gray-800 transition-colors">閉じる</button>
@@ -225,7 +225,7 @@ export default function AudioPage() {
 
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold text-gray-900">音声ファイルを整形</h1>
+          <h1 className="text-xl font-bold text-gray-900">音声ファイルを生成</h1>
           {isBusy ? (
             <span className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium opacity-40 cursor-not-allowed">← 戻る</span>
           ) : (
@@ -241,18 +241,18 @@ export default function AudioPage() {
           </div>
         )}
 
-        {/* 整形結果 */}
+        {/* 生成結果 */}
         {result ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">整形結果</h2>
+              <h2 className="text-base font-semibold text-gray-900">生成結果</h2>
               <button onClick={() => downloadExcel(result)} className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white font-medium hover:bg-green-700 transition-colors">
                 Excelをダウンロード
               </button>
             </div>
             <MarkdownText className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-900 leading-relaxed" text={result} />
             <button onClick={handleReset} className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-              別のファイルを整形する
+              別のファイルを生成する
             </button>
           </div>
         ) : (
@@ -262,7 +262,7 @@ export default function AudioPage() {
               <div className="py-4 text-center">
                 <div className="inline-block w-7 h-7 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-3" />
                 <p className="text-sm font-medium text-gray-700">
-                  {isUploading ? 'アップロード中...' : isTranscribing ? '文字起こし中...' : 'AI整形中...'}
+                  {isUploading ? 'アップロード中...' : isTranscribing ? '文字起こし中...' : 'AI生成中...'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">しばらくお待ちください</p>
               </div>
@@ -306,7 +306,7 @@ export default function AudioPage() {
                   disabled={!file}
                   className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  文字起こし・整形する
+                  文字起こし・生成する
                 </button>
               </>
             )}

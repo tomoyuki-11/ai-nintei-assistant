@@ -233,7 +233,7 @@ useEffect(() => {
       const msg = e instanceof Error ? e.message : ''
       setError(msg === 'Load failed' || msg === 'Failed to fetch'
         ? 'ネットワークエラーが発生しました。インターネット接続を確認してください。'
-        : msg || '整形に失敗しました'
+        : msg || '生成に失敗しました'
       )
     } finally {
       setIsFormatting(false)
@@ -276,13 +276,13 @@ useEffect(() => {
 
   async function handlePipelineRecoverAndFormat() {
     if (!downloadableAudio) return
-    // 整形中断の場合は保存済みの文字起こしテキストを再利用（再API呼び出し不要）
+    // 生成中断の場合は保存済みの文字起こしテキストを再利用（再API呼び出し不要）
     const savedText = localStorage.getItem('pipeline_text') || ''
     const text = savedText || await transcribeFile(downloadableAudio)
     if (!text.trim()) return
     // 新たに文字起こしした場合は次回リカバリのためにlocalStorageへ保存
     if (!savedText && text) localStorage.setItem('pipeline_text', text)
-    // pipeline_pending・pipelinePendingはformatText成功時にクリアする（整形失敗時もバナーを維持するため）
+    // pipeline_pending・pipelinePendingはformatText成功時にクリアする（生成失敗時もバナーを維持するため）
     const id = await saveTranscription(text)
     await formatText(text, id)
   }
@@ -291,7 +291,7 @@ useEffect(() => {
     const currentText = await retryTranscription()
     if (!currentText.trim()) return
     clearPendingAudio()
-    // 整形失敗時に「処理が途中で中断されました」バナーで再試行できるようにする
+    // 生成失敗時に「処理が途中で中断されました」バナーで再試行できるようにする
     localStorage.setItem('pipeline_pending', '1')
     localStorage.setItem('pipeline_text', currentText)
     setPipelinePending(true)
@@ -357,19 +357,19 @@ useEffect(() => {
         </div>
       )}
 
-      {/* 文字起こし・整形中オーバーレイ */}
+      {/* 文字起こし・生成中オーバーレイ */}
       {isBusy && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-200/80 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl px-8 py-8 mx-6 max-w-xs w-full flex flex-col items-center gap-5">
             <div className="w-12 h-12 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin" />
             <div className="text-center">
               <p className="text-base font-semibold text-gray-900">
-                AI {isTranscribing ? '文字起こし' : '整形'}中です
+                AI {isTranscribing ? '文字起こし' : '生成'}中です
               </p>
               <p className="text-xs text-gray-400 mt-1">しばらくお待ちください...</p>
             </div>
             <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-center">
-              <p className="text-xs font-semibold text-amber-800">整形が完了するまでページを離れないでください</p>
+              <p className="text-xs font-semibold text-amber-800">生成が完了するまでページを離れないでください</p>
               <p className="text-xs text-amber-600 mt-0.5">データが失われる可能性があります</p>
             </div>
           </div>
@@ -432,7 +432,7 @@ useEffect(() => {
 
 <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold text-gray-900">録音して整形</h1>
+          <h1 className="text-xl font-bold text-gray-900">録音して生成</h1>
           {isBusy ? (
             <span className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-medium opacity-40 cursor-not-allowed">← 戻る</span>
           ) : (
@@ -446,20 +446,20 @@ useEffect(() => {
             <p className="text-xs font-medium text-orange-800 mb-1">前回の録音データが見つかりました</p>
             <p className="text-xs text-orange-700 mb-2">リロード前の録音音声が保存されています。どうしますか？</p>
             <div className="flex gap-2 flex-wrap">
-              <button onClick={handleRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">整形する</button>
+              <button onClick={handleRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">生成する</button>
               <button onClick={() => { discardRecovery(); handleStartRecordingClick() }} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
               <button onClick={discardRecovery} disabled={isBusy} className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors">破棄</button>
             </div>
           </div>
         )}
 
-        {/* リカバリバナー（文字起こし・整形中断） */}
+        {/* リカバリバナー（文字起こし・生成中断） */}
         {pipelinePending && !!downloadableAudio && !result && !hasPendingRecovery && !isRecording && (
           <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-4">
             <p className="text-xs font-medium text-orange-800 mb-1">処理が途中で中断されました</p>
-            <p className="text-xs text-orange-700 mb-2">文字起こしまたは整形の途中でリロードされました。録音音声は保存されています。どうしますか？</p>
+            <p className="text-xs text-orange-700 mb-2">文字起こしまたは生成の途中でリロードされました。録音音声は保存されています。どうしますか？</p>
             <div className="flex gap-2 flex-wrap">
-              <button onClick={handlePipelineRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">整形する</button>
+              <button onClick={handlePipelineRecoverAndFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">生成する</button>
               <button onClick={() => { setPipelinePending(false); localStorage.removeItem('pipeline_pending'); localStorage.removeItem('pipeline_text'); handleStartRecordingClick() }} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">録音を再開</button>
               <button onClick={() => { setPipelinePending(false); localStorage.removeItem('pipeline_pending'); localStorage.removeItem('pipeline_text'); clearRecording() }} disabled={isBusy} className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors">破棄</button>
             </div>
@@ -471,19 +471,19 @@ useEffect(() => {
           <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mb-4">
             {!isOnline ? (
               <>
-                <p className="text-xs font-medium text-orange-800 mb-1">整形待ちのデータがあります</p>
+                <p className="text-xs font-medium text-orange-800 mb-1">生成待ちのデータがあります</p>
                 <p className="text-xs text-orange-700">オンラインになれば作業を再開できます</p>
               </>
             ) : uploadState === 'uploading' ? (
               <>
-                <p className="text-xs font-medium text-orange-800 mb-1">整形待ちのデータをアップロード中です</p>
+                <p className="text-xs font-medium text-orange-800 mb-1">生成待ちのデータをアップロード中です</p>
                 <p className="text-xs text-orange-600">しばらくお待ちください...</p>
               </>
             ) : (
               <>
                 <p className="text-xs font-medium text-orange-800 mb-2">録音済み音声があります</p>
                 <div className="flex gap-2">
-                  <button onClick={handleRetryFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">録音済み音声を文字起こし・整形する</button>
+                  <button onClick={handleRetryFormat} disabled={isBusy} className="rounded-full bg-orange-500 px-3 py-1 text-xs text-white font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">録音済み音声を文字起こし・生成する</button>
                   <button onClick={clearPendingAudio} disabled={isBusy} className="rounded-full border border-orange-300 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">破棄</button>
                 </div>
               </>
@@ -499,11 +499,11 @@ useEffect(() => {
           </div>
         )}
 
-        {/* 整形結果 */}
+        {/* 生成結果 */}
         {result ? (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-gray-900">整形結果</h2>
+              <h2 className="text-base font-semibold text-gray-900">生成結果</h2>
               <div className="flex items-center gap-2">
                 {/* 音声ダウンロード（一時非表示）
                 {downloadableAudio && (
@@ -529,7 +529,7 @@ useEffect(() => {
               <div className="rounded-xl bg-white border border-gray-200 p-8 text-center shadow-sm">
                 <div className="inline-block w-7 h-7 rounded-full border-2 border-blue-500 border-t-transparent animate-spin mb-4" />
                 <p className="text-sm font-medium text-gray-700">
-                  {isTranscribing ? '文字起こし中...' : 'AI整形中...'}
+                  {isTranscribing ? '文字起こし中...' : 'AI生成中...'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">しばらくお待ちください</p>
               </div>
@@ -573,15 +573,15 @@ useEffect(() => {
                       )}
                     </div>
 
-                    {/* STEP 2: 文字起こし・整形（アップロード完了後に表示） */}
+                    {/* STEP 2: 文字起こし・生成（アップロード完了後に表示） */}
                     {uploadState === 'done' && (
                       <div className="space-y-2">
-                        <p className="text-xs font-medium text-gray-400 tracking-wide">STEP 2 — 文字起こし・整形</p>
+                        <p className="text-xs font-medium text-gray-400 tracking-wide">STEP 2 — 文字起こし・生成</p>
                         <button
                           onClick={handleTranscribeAndFormat}
                           className="flex items-center gap-2 rounded-full bg-green-500 px-5 py-2.5 text-sm text-white font-medium hover:bg-green-600 transition-colors"
                         >
-                          文字起こし・整形する
+                          文字起こし・生成する
                         </button>
                         <p className="text-xs text-gray-400 mt-1">1時間の音声の場合、完了まで5〜6分ほどかかります</p>
                       </div>
@@ -625,7 +625,7 @@ useEffect(() => {
                       {isRecording && isMobile && !isIOS && <span className="text-xs text-orange-500 font-medium">⚠ リロードで停止します</span>}
                     </div>
                     {!isRecording && (
-                      <p className="text-xs text-gray-400 mt-3">録音停止後、音声のアップロードと文字起こし・整形を手動で行えます</p>
+                      <p className="text-xs text-gray-400 mt-3">録音停止後、音声のアップロードと文字起こし・生成を手動で行えます</p>
                     )}
                   </div>
                 )}

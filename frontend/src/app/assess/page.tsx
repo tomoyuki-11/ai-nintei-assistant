@@ -29,7 +29,7 @@ export default function AssessPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-xl font-bold text-gray-900">認定調査</h1>
-            <p className="text-xs text-gray-500 mt-0.5">整形方法を選択してください</p>
+            <p className="text-xs text-gray-500 mt-0.5">生成方法を選択してください</p>
           </div>
           <Link
             href="/"
@@ -42,7 +42,7 @@ export default function AssessPage() {
         {/* モバイル：縦並び / PC：横並び3列 */}
         <div className="flex flex-col sm:flex-row gap-3">
 
-          {/* 録音して整形（回復データがある場合はオレンジ色） */}
+          {/* 録音して生成（回復データがある場合はオレンジ色） */}
           <Link
             href="/assess/record"
             className={`flex sm:flex-col items-center sm:items-start gap-4 sm:gap-3 rounded-xl px-5 py-4 sm:p-5 shadow-sm transition-all sm:flex-1 ${
@@ -58,13 +58,13 @@ export default function AssessPage() {
             </div>
             <div className="min-w-0 flex-1 sm:flex-none">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className={`text-sm font-semibold ${hasRecordingData ? 'text-orange-800' : 'text-gray-900'}`}>録音して整形</p>
+                <p className={`text-sm font-semibold ${hasRecordingData ? 'text-orange-800' : 'text-gray-900'}`}>録音して生成</p>
                 {hasRecordingData && (
                   <span className="rounded-full bg-orange-200 px-2 py-0.5 text-xs font-medium text-orange-700">前回のデータあり</span>
                 )}
               </div>
               <p className={`text-xs mt-0.5 ${hasRecordingData ? 'text-orange-600' : 'text-gray-500'}`}>
-                {hasRecordingData ? '保存された録音データがあります。タップして続きを確認できます。' : 'その場で録音してAIが文字起こし・認定調査票形式に整形します'}
+                {hasRecordingData ? '保存された録音データがあります。タップして続きを確認できます。' : 'その場で録音してAIが文字起こし・認定調査票形式に生成します'}
               </p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" className={`ml-auto sm:hidden shrink-0 w-5 h-5 ${hasRecordingData ? 'text-orange-400' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -72,7 +72,7 @@ export default function AssessPage() {
             </svg>
           </Link>
 
-          {/* テキストを貼り付けて整形 */}
+          {/* テキストを貼り付けて生成 */}
           <Link
             href="/assess/text"
             className="flex sm:flex-col items-center sm:items-start gap-4 sm:gap-3 rounded-xl bg-white border border-gray-200 px-5 py-4 sm:p-5 shadow-sm hover:shadow-md hover:border-blue-300 active:bg-gray-50 transition-all sm:flex-1"
@@ -83,15 +83,15 @@ export default function AssessPage() {
               </svg>
             </div>
             <div className="min-w-0 flex-1 sm:flex-none">
-              <p className="text-sm font-semibold text-gray-900">テキストを貼り付けて整形</p>
-              <p className="text-xs text-gray-500 mt-0.5">テキストを貼り付けAIが認定調査票形式に整形します</p>
+              <p className="text-sm font-semibold text-gray-900">テキストを貼り付けて生成</p>
+              <p className="text-xs text-gray-500 mt-0.5">テキストを貼り付けAIが認定調査票形式に生成します</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" className="ml-auto sm:hidden shrink-0 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </Link>
 
-          {/* 音声ファイルを整形 */}
+          {/* 音声ファイルを生成 */}
           <Link
             href="/assess/audio"
             className="flex sm:flex-col items-center sm:items-start gap-4 sm:gap-3 rounded-xl bg-white border border-gray-200 px-5 py-4 sm:p-5 shadow-sm hover:shadow-md hover:border-blue-300 active:bg-gray-50 transition-all sm:flex-1"
@@ -102,8 +102,8 @@ export default function AssessPage() {
               </svg>
             </div>
             <div className="min-w-0 flex-1 sm:flex-none">
-              <p className="text-sm font-semibold text-gray-900">音声ファイルを整形</p>
-              <p className="text-xs text-gray-500 mt-0.5">録音済みの音声データをアップロードしAIが文字起こし・認定調査票形式に整形します</p>
+              <p className="text-sm font-semibold text-gray-900">音声ファイルを生成</p>
+              <p className="text-xs text-gray-500 mt-0.5">録音済みの音声データをアップロードしAIが文字起こし・認定調査票形式に生成します</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" className="ml-auto sm:hidden shrink-0 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

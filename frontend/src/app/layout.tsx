@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "AI認定調査アシスタント",
-  description: "文字起こしテキストをAIが要介護認定フォームに整形します",
+  description: "文字起こしテキストをAIが要介護認定フォームに生成します",
   icons: {
     icon: "/favicon.png",
     apple: "/apple-touch-icon.png",

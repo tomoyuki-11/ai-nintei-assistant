@@ -181,7 +181,7 @@ export default function FormatForm() {
       window.dispatchEvent(new Event('planStatusChanged'))
       setSavedId(null)
       clearRecording()
-      showSaveMessage('整形結果を保存しました')
+      showSaveMessage('生成結果を保存しました')
     } catch (e) {
       setError(e instanceof Error ? e.message : '予期しないエラーが発生しました')
     } finally {
@@ -336,12 +336,12 @@ export default function FormatForm() {
         )
       })()}
 
-      {/* AI整形確認モーダル */}
+      {/* AI生成確認モーダル */}
       {showFormatConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl p-6 w-80 mx-4">
-            <p className="text-sm font-semibold text-gray-900 mb-2">AI整形を実行しますか？</p>
-            <p className="text-xs text-gray-500 mb-5">入力されたテキストをAIが認定調査票形式に整形します。</p>
+            <p className="text-sm font-semibold text-gray-900 mb-2">AI生成を実行しますか？</p>
+            <p className="text-xs text-gray-500 mb-5">入力されたテキストをAIが認定調査票形式に生成します。</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowFormatConfirm(false)}
@@ -510,7 +510,7 @@ export default function FormatForm() {
         disabled={loading || !text.trim()}
         className="w-full rounded-lg bg-blue-600 px-4 py-3 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
-        {loading ? 'AI整形中...' : 'AI整形を実行'}
+        {loading ? 'AI生成中...' : 'AI生成を実行'}
       </button>
 
       {error && (
@@ -523,7 +523,7 @@ export default function FormatForm() {
       {result && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">整形結果</h2>
+            <h2 className="text-lg font-semibold text-gray-900">生成結果</h2>
             <button
               onClick={() => downloadExcel(result)}
               className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white font-medium hover:bg-green-700 transition-colors"

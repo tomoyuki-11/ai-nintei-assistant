@@ -122,7 +122,7 @@ export default function HistoryPage() {
       )
       setOpenFormattedId(item.id)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '整形に失敗しました')
+      alert(e instanceof Error ? e.message : '生成に失敗しました')
     } finally {
       setFormattingId(null)
     }
@@ -231,10 +231,10 @@ export default function HistoryPage() {
                           編集
                         </button>
                         {formattingId === item.id ? (
-                          <span className="text-xs text-blue-500 animate-pulse">整形中...</span>
+                          <span className="text-xs text-blue-500 animate-pulse">生成中...</span>
                         ) : confirmingId === item.id ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600">整形されていますが、上書きしますか？</span>
+                            <span className="text-xs text-gray-600">生成されていますが、上書きしますか？</span>
                             <button
                               onClick={() => handleFormat(item)}
                               className="rounded px-2.5 py-1 text-xs bg-orange-500 text-white hover:bg-orange-600 transition-colors"
@@ -253,7 +253,7 @@ export default function HistoryPage() {
                             onClick={() => onFormatClick(item)}
                             className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-blue-700 transition-colors"
                           >
-                            AI整形を実行
+                            AI生成を実行
                           </button>
                         )}
                       </>
@@ -311,7 +311,7 @@ export default function HistoryPage() {
                   )}
                 </div>
 
-                {/* 整形結果 */}
+                {/* 生成結果 */}
                 {item.formatted && (
                   <div className="px-4 py-3">
                     <div className="flex items-center justify-between">
@@ -320,7 +320,7 @@ export default function HistoryPage() {
                         className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
                       >
                         <span>{openFormattedId === item.id ? '▲' : '▶'}</span>
-                        整形結果を{openFormattedId === item.id ? '閉じる' : '見る'}
+                        生成結果を{openFormattedId === item.id ? '閉じる' : '見る'}
                       </button>
                       <button
                         onClick={() => downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)}

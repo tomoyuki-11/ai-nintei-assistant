@@ -243,7 +243,7 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* 整形結果 */}
+                  {/* 生成結果 */}
                   {item.formatted && (
                     <div className="px-4 py-3">
                       <div className="flex items-center justify-between">
@@ -260,7 +260,7 @@ export default function HomePage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                             </svg>
                           )}
-                          整形結果を{openFormattedId === item.id ? '閉じる' : '見る'}
+                          生成結果を{openFormattedId === item.id ? '閉じる' : '見る'}
                         </button>
                         <button
                           onClick={() => {

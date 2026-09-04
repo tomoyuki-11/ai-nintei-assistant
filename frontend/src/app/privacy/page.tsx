@@ -64,7 +64,7 @@ export default function PrivacyPolicyPage() {
             </h3>
             <ul className="list-disc list-inside space-y-1 pl-2">
               <li>文字起こしテキスト：録音した音声の文字起こし結果</li>
-              <li>整形テキスト：AIが認定調査形式に整形した記録</li>
+              <li>生成テキスト：AIが認定調査形式に生成した記録</li>
               <li>作成日時・作成者名</li>
             </ul>
             <p className="mt-2 text-xs text-gray-500">
@@ -127,7 +127,7 @@ export default function PrivacyPolicyPage() {
 
               <div className="border border-gray-200 rounded-lg p-4">
                 <h3 className="font-medium text-gray-900 mb-1">
-                  Anthropic（AI整形）
+                  Anthropic（AI生成）
                 </h3>
                 <p className="text-xs mb-1">
                   <span className="text-gray-500">送信するデータ：</span>
@@ -135,7 +135,7 @@ export default function PrivacyPolicyPage() {
                 </p>
                 <p className="text-xs mb-1">
                   <span className="text-gray-500">目的：</span>Claude
-                  APIを用いた認定調査記録への整形・構造化
+                  APIを用いた認定調査記録への生成・構造化
                 </p>
                 <p className="text-xs">
                   <span className="text-gray-500">プライバシーポリシー：</span>
@@ -185,7 +185,7 @@ export default function PrivacyPolicyPage() {
               本サービスで録音・入力される調査内容には、要介護認定の対象となる方（以下「調査対象者」）の氏名・健康状態・日常生活の状況・家族構成などの個人情報が含まれる可能性があります。
             </p>
             <p className="mb-2">
-              これらの情報は、文字起こしおよびAI整形の処理を通じて上記の外部サービスへ送信されます。また、保存設定に応じてデータベースに記録されます。
+              これらの情報は、文字起こしおよびAI生成の処理を通じて上記の外部サービスへ送信されます。また、保存設定に応じてデータベースに記録されます。
             </p>
             <p className="text-xs text-gray-500">
               ※
