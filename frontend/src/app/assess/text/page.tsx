@@ -101,6 +101,79 @@ export default function TextPage() {
       {/* 使用回数上限モーダル */}
       <PlanLimitModal limitPlan={limitPlan} onClose={() => setLimitPlan(null)} />
 
+      {/* AI生成中オーバーレイ */}
+      {isFormatting && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-200/80 backdrop-blur-sm">
+          <style>{`
+            @keyframes sphere-glow {
+              0%, 100% { box-shadow: 0 0 14px 4px rgba(139,92,246,0.55), 0 0 28px 8px rgba(59,130,246,0.3); }
+              50% { box-shadow: 0 0 26px 10px rgba(139,92,246,0.8), 0 0 52px 18px rgba(59,130,246,0.45); }
+            }
+            @keyframes sphere-spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+            @keyframes sphere-spin-r {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(-360deg); }
+            }
+          `}</style>
+          <div className="rounded-2xl shadow-xl px-8 py-8 mx-6 max-w-xs w-full flex flex-col items-center gap-5 bg-purple-50">
+            <div style={{ position: 'relative', width: '100px', height: '100px' }}>
+              <div style={{
+                width: '100px', height: '100px', borderRadius: '50%',
+                background: 'radial-gradient(circle at 38% 32%, #93c5fd 0%, #3b82f6 28%, #1e40af 58%, #1e1b4b 100%)',
+                animation: 'sphere-glow 2.5s ease-in-out infinite',
+                overflow: 'hidden', position: 'relative',
+              }}>
+                <div style={{
+                  position: 'absolute', top: '8%', left: '16%',
+                  width: '42%', height: '28%', borderRadius: '50%',
+                  background: 'radial-gradient(ellipse, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.04) 100%)',
+                }}/>
+                <svg viewBox="0 0 100 100" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', animation: 'sphere-spin 7s linear infinite', transformOrigin: '50% 50%' }}>
+                  <line x1="50" y1="5" x2="90" y2="38" stroke="rgba(147,197,253,0.75)" strokeWidth="0.7"/>
+                  <line x1="50" y1="5" x2="10" y2="38" stroke="rgba(147,197,253,0.75)" strokeWidth="0.7"/>
+                  <line x1="90" y1="38" x2="72" y2="90" stroke="rgba(147,197,253,0.65)" strokeWidth="0.7"/>
+                  <line x1="10" y1="38" x2="28" y2="90" stroke="rgba(147,197,253,0.65)" strokeWidth="0.7"/>
+                  <line x1="72" y1="90" x2="28" y2="90" stroke="rgba(147,197,253,0.6)" strokeWidth="0.7"/>
+                  <line x1="50" y1="5" x2="50" y2="95" stroke="rgba(147,197,253,0.35)" strokeWidth="0.5"/>
+                  <line x1="10" y1="38" x2="90" y2="62" stroke="rgba(147,197,253,0.4)" strokeWidth="0.5"/>
+                  <line x1="90" y1="38" x2="10" y2="62" stroke="rgba(147,197,253,0.4)" strokeWidth="0.5"/>
+                  <circle cx="50" cy="5" r="2.5" fill="rgba(186,230,253,1)"/>
+                  <circle cx="90" cy="38" r="2" fill="rgba(186,230,253,0.9)"/>
+                  <circle cx="10" cy="38" r="2" fill="rgba(186,230,253,0.9)"/>
+                  <circle cx="72" cy="90" r="2" fill="rgba(186,230,253,0.9)"/>
+                  <circle cx="28" cy="90" r="2" fill="rgba(186,230,253,0.9)"/>
+                  <circle cx="50" cy="50" r="1.8" fill="rgba(186,230,253,0.7)"/>
+                </svg>
+                <svg viewBox="0 0 100 100" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', animation: 'sphere-spin-r 11s linear infinite', transformOrigin: '50% 50%', opacity: 0.75 }}>
+                  <line x1="5" y1="50" x2="95" y2="50" stroke="rgba(196,181,253,0.65)" strokeWidth="0.6"/>
+                  <line x1="20" y1="14" x2="80" y2="86" stroke="rgba(196,181,253,0.55)" strokeWidth="0.6"/>
+                  <line x1="80" y1="14" x2="20" y2="86" stroke="rgba(196,181,253,0.55)" strokeWidth="0.6"/>
+                  <line x1="15" y1="24" x2="85" y2="76" stroke="rgba(196,181,253,0.4)" strokeWidth="0.5"/>
+                  <line x1="85" y1="24" x2="15" y2="76" stroke="rgba(196,181,253,0.4)" strokeWidth="0.5"/>
+                  <circle cx="5" cy="50" r="2" fill="rgba(216,180,254,0.95)"/>
+                  <circle cx="95" cy="50" r="2" fill="rgba(216,180,254,0.95)"/>
+                  <circle cx="20" cy="14" r="1.6" fill="rgba(216,180,254,0.85)"/>
+                  <circle cx="80" cy="86" r="1.6" fill="rgba(216,180,254,0.85)"/>
+                  <circle cx="80" cy="14" r="1.6" fill="rgba(216,180,254,0.85)"/>
+                  <circle cx="20" cy="86" r="1.6" fill="rgba(216,180,254,0.85)"/>
+                </svg>
+              </div>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-semibold text-gray-900">AI 生成中です</p>
+              <p className="text-xs text-gray-400 mt-1">しばらくお待ちください...</p>
+            </div>
+            <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-center">
+              <p className="text-xs font-semibold text-amber-800">生成が完了するまでページを離れないでください</p>
+              <p className="text-xs text-amber-600 mt-0.5">データが失われる可能性があります</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* キャンセル確認モーダル */}
       {showCancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
