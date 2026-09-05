@@ -235,10 +235,10 @@ export default function HomePage() {
               return (
                 <div
                   key={item.id}
-                  className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+                  className="rounded-xl border border-gray-200 bg-white shadow-sm"
                 >
                   {/* ヘッダー */}
-                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 rounded-t-xl">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                       <p className="text-xs text-gray-400 shrink-0">{formatDate(item.created_at)}</p>
                       {item.user_name && (
@@ -371,7 +371,7 @@ export default function HomePage() {
                   */}
 
                   {/* カード下部：削除ボタン */}
-                  <div className="flex justify-end px-4 py-2 border-t border-gray-100">
+                  <div className="flex justify-end px-4 py-2 border-t border-gray-100 rounded-b-xl">
                     {isDeleting ? (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-600">削除しますか？</span>
