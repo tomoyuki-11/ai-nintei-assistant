@@ -39,7 +39,6 @@ export default function HomePage() {
   const [splash, setSplash] = useState<'visible' | 'fading' | 'hidden'>('visible')
   const [headerHeight, setHeaderHeight] = useState(61)
   const [memos, setMemos] = useState<Record<string, string>>({})
-  const [memoSaved, setMemoSaved] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const header = document.querySelector('header')
@@ -100,8 +99,6 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ memo: value }),
       })
-      setMemoSaved((prev) => ({ ...prev, [id]: true }))
-      setTimeout(() => setMemoSaved((prev) => ({ ...prev, [id]: false })), 2000)
     } catch {
       // silent fail
     }
@@ -255,9 +252,6 @@ export default function HomePage() {
                           onBlur={(e) => handleSaveMemo(item.id, e.target.value)}
                           className="flex-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-400 min-w-0"
                         />
-                        {memoSaved[item.id] && (
-                          <span className="text-xs text-green-600 shrink-0">✓ 保存</span>
-                        )}
                       </div>
                     </div>
                   </div>
