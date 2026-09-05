@@ -39,6 +39,7 @@ export default function HomePage() {
   const [splash, setSplash] = useState<'visible' | 'fading' | 'hidden'>('visible')
   const [headerHeight, setHeaderHeight] = useState(61)
   const [memos, setMemos] = useState<Record<string, string>>({})
+  const [openDownloadId, setOpenDownloadId] = useState<string | null>(null)
 
   useEffect(() => {
     const header = document.querySelector('header')
@@ -256,35 +257,83 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* 生成結果 */}
-                  {item.formatted && (
+                  {/* 生成結果 ＋ ダウンロードドロップダウン */}
+                  {(item.formatted || item.text) && (
                     <div className="px-4 py-3">
                       <div className="flex items-center justify-between">
-                        <button
-                          onClick={() => setOpenFormattedId(openFormattedId === item.id ? null : item.id)}
-                          className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
-                        >
-                          {openFormattedId === item.id ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                        {item.formatted ? (
+                          <button
+                            onClick={() => setOpenFormattedId(openFormattedId === item.id ? null : item.id)}
+                            className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                          >
+                            {openFormattedId === item.id ? (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
+                            生成結果を{openFormattedId === item.id ? '閉じる' : '見る'}
+                          </button>
+                        ) : <div />}
+
+                        {/* ダウンロードドロップダウン */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setOpenDownloadId(openDownloadId === item.id ? null : item.id)}
+                            className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            ダウンロード
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                             </svg>
+                          </button>
+                          {openDownloadId === item.id && (
+                            <>
+                              <div className="fixed inset-0 z-10" onClick={() => setOpenDownloadId(null)} />
+                              <div className="absolute right-0 top-full mt-1 z-20 bg-white rounded-lg border border-gray-200 shadow-lg py-1 min-w-[170px]">
+                                {item.formatted && (
+                                  <button
+                                    onClick={() => {
+                                      downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)
+                                      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${item.id}/mark-downloaded`, {
+                                        method: 'POST',
+                                        headers: authHeaders(),
+                                      }).catch(() => {})
+                                      setOpenDownloadId(null)
+                                    }}
+                                    className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                  >
+                                    Excel形式
+                                  </button>
+                                )}
+                                {item.text && (
+                                  <button
+                                    onClick={() => {
+                                      const bom = new Uint8Array([0xEF, 0xBB, 0xBF])
+                                      const blob = new Blob([bom, item.text!], { type: 'text/plain;charset=utf-8' })
+                                      const url = URL.createObjectURL(blob)
+                                      const a = document.createElement('a')
+                                      a.href = url
+                                      a.download = `文字起こし_${formatDate(item.created_at)}.txt`
+                                      a.click()
+                                      URL.revokeObjectURL(url)
+                                      setOpenDownloadId(null)
+                                    }}
+                                    className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                  >
+                                    文字起こし（テキスト）
+                                  </button>
+                                )}
+                              </div>
+                            </>
                           )}
-                          生成結果を{openFormattedId === item.id ? '閉じる' : '見る'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            downloadExcel(item.formatted!, `認定調査_${formatDate(item.created_at)}.xlsx`)
-                            fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${item.id}/mark-downloaded`, {
-                              method: 'POST',
-                              headers: authHeaders(),
-                            }).catch(() => {})
-                          }}
-                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-green-700 transition-colors"
-                        >Excelをダウンロード</button>
+                        </div>
                       </div>
                       {openFormattedId === item.id && (
                         <MarkdownText className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-900 leading-relaxed" text={item.formatted!} />
@@ -320,25 +369,6 @@ export default function HomePage() {
                     </div>
                   )}
                   */}
-
-                  {/* 文字起こしダウンロード */}
-                  {item.text && (
-                    <div className={`px-4 py-3${item.formatted || item.audio_path ? ' border-t border-gray-100' : ''}`}>
-                      <button
-                        onClick={() => {
-                          const bom = new Uint8Array([0xEF, 0xBB, 0xBF])
-                          const blob = new Blob([bom, item.text!], { type: 'text/plain;charset=utf-8' })
-                          const url = URL.createObjectURL(blob)
-                          const a = document.createElement('a')
-                          a.href = url
-                          a.download = `文字起こし_${formatDate(item.created_at)}.txt`
-                          a.click()
-                          URL.revokeObjectURL(url)
-                        }}
-                        className="rounded-lg bg-gray-600 px-3 py-1.5 text-xs text-white font-medium hover:bg-gray-700 transition-colors"
-                      >文字起こしダウンロード</button>
-                    </div>
-                  )}
 
                   {/* カード下部：削除ボタン */}
                   <div className="flex justify-end px-4 py-2 border-t border-gray-100">
