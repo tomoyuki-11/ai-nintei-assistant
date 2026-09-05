@@ -14,6 +14,7 @@ type Transcription = {
   user_name: string
   created_at: string
   audio_path: string | null
+  memo: string | null
 }
 
 function formatDate(iso: string): string {
@@ -37,6 +38,8 @@ export default function HomePage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [splash, setSplash] = useState<'visible' | 'fading' | 'hidden'>('visible')
   const [headerHeight, setHeaderHeight] = useState(61)
+  const [memos, setMemos] = useState<Record<string, string>>({})
+  const [memoSaved, setMemoSaved] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const header = document.querySelector('header')
@@ -89,6 +92,20 @@ export default function HomePage() {
       setTimeout(() => setSplash('hidden'), 350)
     })
   }, [router])
+
+  async function handleSaveMemo(id: string, value: string) {
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/history/${id}/memo`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ memo: value }),
+      })
+      setMemoSaved((prev) => ({ ...prev, [id]: true }))
+      setTimeout(() => setMemoSaved((prev) => ({ ...prev, [id]: false })), 2000)
+    } catch {
+      // silent fail
+    }
+  }
 
   async function handleDownloadAudio(item: Transcription) {
     setDownloadConfirmId(null)
@@ -223,23 +240,25 @@ export default function HomePage() {
                   className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
                 >
                   {/* ヘッダー */}
-                  <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50 gap-2">
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                       <p className="text-xs text-gray-400 shrink-0">{formatDate(item.created_at)}</p>
                       {item.user_name && (
-                        <p className="text-xs text-gray-500 truncate">担当：{item.user_name}</p>
+                        <p className="text-xs text-gray-500 shrink-0">担当：{item.user_name}</p>
                       )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isDeleting ? (
-                        <>
-                          <span className="text-xs text-gray-600">削除しますか？</span>
-                          <button onClick={() => handleDelete(item.id)} className="rounded px-2.5 py-1 text-xs bg-red-500 text-white hover:bg-red-600 transition-colors">はい</button>
-                          <button onClick={() => setDeletingId(null)} className="rounded px-2.5 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">いいえ</button>
-                        </>
-                      ) : (
-                        <button onClick={() => setDeletingId(item.id)} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors">削除</button>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-1 min-w-[120px]">
+                        <input
+                          type="text"
+                          placeholder="備考"
+                          value={memos[item.id] ?? item.memo ?? ''}
+                          onChange={(e) => setMemos((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                          onBlur={(e) => handleSaveMemo(item.id, e.target.value)}
+                          className="flex-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-400 min-w-0"
+                        />
+                        {memoSaved[item.id] && (
+                          <span className="text-xs text-green-600 shrink-0">✓ 保存</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -326,6 +345,19 @@ export default function HomePage() {
                       >文字起こしダウンロード</button>
                     </div>
                   )}
+
+                  {/* カード下部：削除ボタン */}
+                  <div className="flex justify-end px-4 py-2 border-t border-gray-100">
+                    {isDeleting ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-600">削除しますか？</span>
+                        <button onClick={() => handleDelete(item.id)} className="rounded px-2.5 py-1 text-xs bg-red-500 text-white hover:bg-red-600 transition-colors">はい</button>
+                        <button onClick={() => setDeletingId(null)} className="rounded px-2.5 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">いいえ</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDeletingId(item.id)} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors">削除</button>
+                    )}
+                  </div>
                 </div>
               )
             })}

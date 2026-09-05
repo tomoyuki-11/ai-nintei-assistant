@@ -173,6 +173,11 @@ struct UpdateTextRequest {
 }
 
 #[derive(Deserialize)]
+struct UpdateTranscriptionMemoRequest {
+    memo: String,
+}
+
+#[derive(Deserialize)]
 struct SaveResultRequest {
     text: String,
     formatted: String,
@@ -419,6 +424,7 @@ async fn main() {
             "/api/history/{id}",
             axum::routing::put(update_text_handler).delete(delete_handler),
         )
+        .route("/api/history/{id}/memo", axum::routing::patch(update_transcription_memo_handler))
         .route("/api/history/{id}/audio", get(download_audio_handler))
         .route("/api/history/{id}/text", axum::routing::delete(delete_text_handler))
         .route("/api/history/{id}/formatted", axum::routing::delete(delete_formatted_handler))
@@ -1729,6 +1735,18 @@ async fn update_text_handler(
     Json(body): Json<UpdateTextRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     db::update_text(&state.db, id, &body.text, auth.organization_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
+}
+
+async fn update_transcription_memo_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdateTranscriptionMemoRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    db::update_transcription_memo(&state.db, id, &body.memo, auth.organization_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::OK)

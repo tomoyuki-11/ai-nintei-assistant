@@ -237,6 +237,7 @@ pub struct Transcription {
     pub user_name: String,
     pub created_at: DateTime<Utc>,
     pub audio_path: Option<String>,
+    pub memo: Option<String>,
 }
 
 pub async fn save_text_only(
@@ -325,6 +326,23 @@ pub async fn update_text(
         "UPDATE transcriptions SET text = $1 WHERE id = $2 AND organization_id = $3",
     )
     .bind(text)
+    .bind(id)
+    .bind(org_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn update_transcription_memo(
+    pool: &PgPool,
+    id: Uuid,
+    memo: &str,
+    org_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE transcriptions SET memo = $1 WHERE id = $2 AND organization_id = $3",
+    )
+    .bind(memo)
     .bind(id)
     .bind(org_id)
     .execute(pool)
@@ -653,7 +671,7 @@ pub async fn list_transcriptions(
     org_id: Uuid,
 ) -> Result<Vec<Transcription>, sqlx::Error> {
     sqlx::query_as::<_, Transcription>(
-        "SELECT id, text, formatted, user_name, created_at, audio_path
+        "SELECT id, text, formatted, user_name, created_at, audio_path, memo
          FROM transcriptions
          WHERE organization_id = $1
          ORDER BY created_at DESC
