@@ -283,7 +283,7 @@ export default function HomePage() {
                         <div className="relative">
                           <button
                             onClick={() => setOpenDownloadId(openDownloadId === item.id ? null : item.id)}
-                            className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -307,7 +307,7 @@ export default function HomePage() {
                                       }).catch(() => {})
                                       setOpenDownloadId(null)
                                     }}
-                                    className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-green-50 active:bg-green-100 transition-colors"
                                   >
                                     Excel形式
                                   </button>
@@ -325,7 +325,7 @@ export default function HomePage() {
                                       URL.revokeObjectURL(url)
                                       setOpenDownloadId(null)
                                     }}
-                                    className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                                   >
                                     文字起こし（テキスト）
                                   </button>
