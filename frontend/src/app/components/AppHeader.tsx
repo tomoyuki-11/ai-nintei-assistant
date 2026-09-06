@@ -17,7 +17,7 @@ export default function AppHeader() {
   if (EXCLUDED.some((p) => pathname === p || pathname.startsWith(p + '/'))) return null
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
       <div className="px-4 py-3 flex items-center justify-between">
         <div className="flex flex-col">
           <Link href="/">
