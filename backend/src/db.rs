@@ -411,6 +411,16 @@ pub async fn get_monthly_usage(pool: &PgPool, org_id: Uuid, year_month: &str) ->
     Ok(row.map(|r| r.0).unwrap_or(0))
 }
 
+pub async fn get_total_usage(pool: &PgPool, org_id: Uuid) -> Result<i32, sqlx::Error> {
+    let row: Option<(i64,)> = sqlx::query_as(
+        "SELECT COALESCE(SUM(count), 0) FROM usage_counts WHERE organization_id = $1",
+    )
+    .bind(org_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| r.0 as i32).unwrap_or(0))
+}
+
 pub async fn increment_usage(pool: &PgPool, org_id: Uuid, year_month: &str) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO usage_counts (organization_id, year_month, count) VALUES ($1, $2, 1)

@@ -1461,9 +1461,15 @@ async fn plan_status_handler(
     let is_expired = org.license_expires_at.map(|exp| exp < now).unwrap_or(false);
     let days_remaining = org.license_expires_at.map(|exp| (exp - now).num_days());
 
-    let monthly_usage = db::get_monthly_usage(&state.db, org.id, &year_month)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let monthly_usage = if org.plan == "trial" {
+        db::get_total_usage(&state.db, org.id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    } else {
+        db::get_monthly_usage(&state.db, org.id, &year_month)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    };
 
     let monthly_limit = match org.plan.as_str() {
         "trial" => Some(TRIAL_MONTHLY_LIMIT),
@@ -1607,9 +1613,15 @@ async fn save_result_handler(
         };
         if let Some(limit) = plan_limit {
             if o.plan == "monthly" || o.plan == "trial" {
-                let usage = db::get_monthly_usage(&state.db, o.id, &year_month)
-                    .await
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                let usage = if o.plan == "trial" {
+                    db::get_total_usage(&state.db, o.id)
+                        .await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                } else {
+                    db::get_monthly_usage(&state.db, o.id, &year_month)
+                        .await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                };
                 if usage >= limit {
                     use_extra_credit = true;
                 }
@@ -1687,9 +1699,15 @@ async fn format_handler(
             _ => None,
         };
         if let Some(limit) = plan_limit {
-            let usage = db::get_monthly_usage(&state.db, o.id, &year_month)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            let usage = if o.plan == "trial" {
+                db::get_total_usage(&state.db, o.id)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            } else {
+                db::get_monthly_usage(&state.db, o.id, &year_month)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            };
             if usage >= limit {
                 // monthly・trial ともにクレジットで継続利用可能
                 let credits = db::get_org_credits(&state.db, o.id)
