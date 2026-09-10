@@ -594,12 +594,38 @@ async fn transcribe_handler(
 
     tracing::info!("Whisper送信: filename={}, whisper_mime={}", filename, whisper_mime);
 
-    // Whisper の 25MB 制限を超える場合は ffmpeg で分割して順次文字起こし
-    const WHISPER_MAX_BYTES: usize = 24 * 1024 * 1024;
-    if audio_data.len() > WHISPER_MAX_BYTES {
-        tracing::info!("大容量ファイル ({} bytes): ffmpeg 分割処理を開始", audio_data.len());
-        let text = transcribe_large_audio(&state.http_client, &state.openai_api_key, audio_data, ext, whisper_mime).await?;
-        return Ok(Json(serde_json::json!({ "text": text })));
+    // 20MB超はモバイルのHTTPタイムアウトを避けるためバックグラウンドジョブで処理
+    const WHISPER_JOB_THRESHOLD: usize = 20_000_000;
+    if audio_data.len() > WHISPER_JOB_THRESHOLD {
+        tracing::info!("大容量ファイル ({} bytes): バックグラウンドジョブで文字起こしを開始", audio_data.len());
+        let job_id = uuid::Uuid::new_v4().to_string();
+        {
+            let mut jobs = state.transcribe_jobs.write().await;
+            jobs.insert(job_id.clone(), TranscribeJobState::Processing);
+        }
+        let state_bg = state.clone();
+        let job_id_bg = job_id.clone();
+        tokio::spawn(async move {
+            let result = transcribe_large_audio(
+                &state_bg.http_client,
+                &state_bg.openai_api_key,
+                audio_data,
+                ext,
+                whisper_mime,
+            ).await.map_err(|(_, msg)| msg);
+            let mut jobs = state_bg.transcribe_jobs.write().await;
+            match result {
+                Ok(text) => {
+                    tracing::info!("文字起こし完了 (job: {}): {} 文字", job_id_bg, text.chars().count());
+                    jobs.insert(job_id_bg, TranscribeJobState::Done(text));
+                }
+                Err(msg) => {
+                    tracing::error!("文字起こし失敗 (job: {}): {}", job_id_bg, msg);
+                    jobs.insert(job_id_bg, TranscribeJobState::Failed(msg));
+                }
+            }
+        });
+        return Ok(Json(serde_json::json!({ "job_id": job_id })));
     }
 
     let part = reqwest::multipart::Part::bytes(audio_data)

@@ -103,7 +103,7 @@ type RecordingContextType = {
 
 const RecordingContext = createContext<RecordingContextType | null>(null);
 
-const MAX_WHISPER_BYTES = 24 * 1024 * 1024; // 25MB上限に対して1MB余裕を持たせる
+const MAX_WHISPER_BYTES = 20_000_000; // 20MB超はバックグラウンドジョブ経由（タイムアウト対策）
 const DRAFT_KEY = "transcription_draft";
 const RECOVERY_DB = "recording_recovery";
 const RECOVERY_STORE = "chunks";
@@ -662,6 +662,28 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         if (!ok) return null;
 
         const data = JSON.parse(responseText);
+
+        // 大容量ファイル：バックグラウンドジョブ方式（job_idが返る）
+        if (data.job_id) {
+          const jobId: string = data.job_id;
+          while (true) {
+            await new Promise((r) => setTimeout(r, 3000));
+            const pollRes = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/api/transcribe-job/${jobId}`,
+              { headers: authHeaders() },
+            );
+            if (!pollRes.ok) return null;
+            const pollData = await pollRes.json();
+            if (pollData.status === "done") {
+              const t: string = pollData.text || "";
+              if (t.trim().length === 0 || isHallucination(t)) return "";
+              return t;
+            }
+            if (pollData.status === "failed") return null;
+            // status === "processing" → 次のポーリングへ
+          }
+        }
+
         const transcribed = data.text || "";
         if (transcribed.trim().length === 0 || isHallucination(transcribed)) {
           return "";
