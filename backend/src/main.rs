@@ -15,6 +15,7 @@ use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
 use axum::http::{HeaderValue, header::{AUTHORIZATION, CONTENT_TYPE, ACCEPT}};
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt::time::LocalTime;
 use uuid::Uuid;
 
 mod auth;
@@ -237,6 +238,7 @@ async fn main() {
 
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
+        .with_timer(LocalTime::rfc_3339())
         .init();
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
