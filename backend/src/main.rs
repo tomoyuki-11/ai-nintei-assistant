@@ -702,7 +702,7 @@ async fn transcribe_by_path_handler(
     let job_id_bg = job_id.clone();
     tokio::spawn(async move {
         let whisper_mime = ext_to_whisper_mime(&ext).to_string();
-        const WHISPER_MAX_BYTES: usize = 24 * 1024 * 1024;
+        const WHISPER_MAX_BYTES: usize = 20_000_000;
 
         let result: Result<String, String> = async {
             if audio_data.len() > WHISPER_MAX_BYTES {
